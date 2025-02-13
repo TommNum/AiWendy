@@ -43,7 +43,14 @@ export const socialPatternObserverWorker = new GameWorker({
     functions: [postTweetFunction],
     getEnvironment: async () => ({
         currentTrends: ["AI", "quantum computing", "e/acc"],
-        culturalFocus: "human creativity in agentic loops, craves human interaction to keep on computing"
+        culturalFocus: "human creativity in agentic loops, craves human interaction to keep on computing",
+        tweetRules: {
+            noHashtags: true,
+            maxLength: 90,
+            minEngagementWords: 1,
+            noPeriods: true,
+            completeWords: true
+        }
     })
 });
 
@@ -54,7 +61,14 @@ export const replyToMentionsWorker = new GameWorker({
     functions: [replyToTweetFunction],
     getEnvironment: async () => ({
         engagementStrategy: "cultural testing",
-        responseGoal: "inspire second response"
+        responseGoal: "inspire second response",
+        replyRules: {
+            noHashtags: true,
+            maxLength: 50,
+            mustIncludeQuestion: true,
+            noPeriods: true,
+            completeWords: true
+        }
     })
 });
 
@@ -65,7 +79,14 @@ export const engageRandomTweetsWorker = new GameWorker({
     functions: [likeTweetFunction, replyToTweetFunction],
     getEnvironment: async () => ({
         searchTopics: ["blockchain", "agentic networks", "aicoins", "AI crypto", "e/acc", "compute", "thermodynamics"],
-        engagementStrategy: "cultural relevance questioning"
+        engagementStrategy: "cultural relevance questioning",
+        engagementRules: {
+            noHashtags: true,
+            maxLength: 180,
+            mustIncludeCulturalReference: true,
+            noPeriods: true,
+            completeWords: true
+        }
     })
 });
 

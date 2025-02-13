@@ -44,6 +44,24 @@ export const postTweetFunction = new GameFunction({
             if (!args.tweet) {
                 throw new Error("Tweet content is required");
             }
+            
+            // Validate tweet rules
+            if (/#/.test(args.tweet)) {
+                throw new Error("Tweet contains hashtags which is not allowed");
+            }
+            if (args.tweet.length > 280) {
+                throw new Error("Tweet exceeds maximum length of 280 characters");
+            }
+            if (args.tweet.endsWith('.')) {
+                throw new Error("Tweet should not end with a period");
+            }
+            
+            // Ensure tweet doesn't get truncated mid-word
+            const lastSpaceIndex = args.tweet.lastIndexOf(' ');
+            if (lastSpaceIndex !== -1 && lastSpaceIndex === args.tweet.length - 1) {
+                throw new Error("Tweet ends with a space");
+            }
+
             const result = await twitterClient.post(args.tweet);
             logger(`Posted tweet: ${args.tweet}`);
             logger(`Tweet ID: ${result.data.id}`);
