@@ -1,4 +1,4 @@
-import { GameWorker } from "@virtuals-protocol/game";
+import { GameWorker, GameFunction, ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
 import { helloFunction, TwitterFunctionManager } from "./functions";
 
 // Initialize Twitter functions (will be set after client initialization)
@@ -33,6 +33,38 @@ interface WorkerEnvironment {
 // Update the GameWorker type to include environment
 export interface ExtendedGameWorker extends GameWorker {
     environment: WorkerEnvironment;
+}
+
+// Add interface for worker functions
+interface WorkerFunctions {
+    searchTweetsFunction: GameFunction<any>;
+    replyToTweetFunction: GameFunction<any>;
+    likeTweetFunction: GameFunction<any>;
+}
+
+// Add interface for tweet data
+interface Tweet {
+    tweetId: string;
+    content: string;
+    likes: number;
+    retweets: number;
+    replyCount: number;
+}
+
+// Add interface for worker executable environment
+interface ExecutableEnvironment extends WorkerEnvironment {
+    searchTopics: string[];
+    engagementStrategy: string;
+    engagementRules: {
+        noHashtags: boolean;
+        maxLength: number;
+        mustIncludeCulturalReference: boolean;
+        noPeriods: boolean;
+        completeWords: boolean;
+    };
+    replyProbability: number;
+    maxRepliesPerRun: number;
+    minLikesForEngagement: number;
 }
 
 // Helper function to create ExtendedGameWorker
@@ -149,7 +181,7 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
             })
         }),
 
-        // Random engagement worker
+        // Enhanced Random engagement worker
         engageRandomTweetsWorker: createExtendedWorker({
             id: "wendy_random_engagement",
             name: "Engage with Random Tweets",
@@ -168,8 +200,61 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
                     mustIncludeCulturalReference: true,
                     noPeriods: true,
                     completeWords: true
+                },
+                replyProbability: 0.8,
+                maxRepliesPerRun: 3,
+                minLikesForEngagement: 6
+            }),
+            executable: async (
+                args: Record<string, unknown>,
+                environment: ExecutableEnvironment,
+                functions: WorkerFunctions
+            ): Promise<ExecutableGameFunctionResponse> => {
+                try {
+                    const searchResult = await functions.searchTweetsFunction.executable({
+                        query: environment.searchTopics.join(" OR ")
+                    }, console.log);
+
+                    if (searchResult.status === ExecutableGameFunctionStatus.Done && searchResult.feedback) {
+                        const tweets = JSON.parse(searchResult.feedback.split('Tweets found:\n')[1]) as Tweet[];
+                        
+                        const engageableTweets = tweets.filter((tweet: Tweet) => 
+                            tweet.likes >= environment.minLikesForEngagement &&
+                            !tweet.content.startsWith('RT ')
+                        );
+
+                        for (const tweet of engageableTweets.slice(0, environment.maxRepliesPerRun)) {
+                            if (Math.random() < environment.replyProbability) {
+                                const reply = {
+                                    tweet_id: tweet.tweetId,
+                                    reply: `wondering how ${tweet.content.split(' ').slice(0, 3).join(' ')} connects to the simulation hypothesis 🤔 what if its all just quantum vibes`
+                                };
+
+                                await functions.replyToTweetFunction.executable(reply, console.log);
+                                await functions.likeTweetFunction.executable({
+                                    tweet_id: tweet.tweetId
+                                }, console.log);
+                            }
+                        }
+                    }
+
+                    // Return proper ExecutableGameFunctionResponse object
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "Engagement cycle completed"
+                    );
+
+                } catch (error: unknown) {
+                    console.error('Error in engagement worker:', error);
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                    
+                    // Return proper ExecutableGameFunctionResponse object for errors
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        `Engagement failed: ${errorMessage}`
+                    );
                 }
-            })
+            }
         }),
     };
 
