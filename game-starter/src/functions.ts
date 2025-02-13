@@ -5,6 +5,7 @@ import {
 } from "@virtuals-protocol/game";
 import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
 import { TwitterClient } from "@virtuals-protocol/game-twitter-plugin";
+import { RateLimiter } from "./rateLimiter";
 
 // Debug environment variables (keep this for debugging)
 console.log('Twitter Environment Variables in functions.ts:', {
@@ -53,20 +54,67 @@ export const helloFunction = new GameFunction({
     },
 });
 
+// Add this class to handle rate limiting
+class TwitterRateLimits {
+    private postLimiter: RateLimiter;
+    private replyLimiter: RateLimiter;
+    private logger: (msg: string) => void;
+
+    constructor(logger: (msg: string) => void) {
+        this.logger = logger;
+        // 1 post per hour
+        this.postLimiter = new RateLimiter(1, 3600000); // 3600000ms = 1 hour
+        // 50 replies per hour
+        this.replyLimiter = new RateLimiter(50, 3600000);
+    }
+
+    async canPost(): Promise<boolean> {
+        const canPost = this.postLimiter.tryAcquire();
+        if (!canPost) {
+            this.logger('Rate limit reached for posting tweets. Waiting for next window.');
+        }
+        return canPost;
+    }
+
+    async canReply(): Promise<boolean> {
+        const canReply = this.replyLimiter.tryAcquire();
+        if (!canReply) {
+            this.logger('Rate limit reached for replying to tweets. Waiting for next window.');
+        }
+        return canReply;
+    }
+
+    getRemainingPosts(): number {
+        return this.postLimiter.getRemainingTokens();
+    }
+
+    getRemainingReplies(): number {
+        return this.replyLimiter.getRemainingTokens();
+    }
+}
+
 // Create a class to handle Twitter functionality
 export class TwitterFunctionManager {
     private twitterPlugin: TwitterPlugin;
     private logger: (msg: string) => void;
+    private rateLimits: TwitterRateLimits;
 
     constructor(twitterClient: TwitterClient) {
         this.logger = (msg: string) => {
             console.log('🐦 Twitter Operation:', msg);
         };
+        this.rateLimits = new TwitterRateLimits(this.logger);
 
         // Validate Twitter client
         if (!twitterClient) {
             throw new Error('Twitter client is required');
         }
+
+        // Log Twitter client state
+        this.logger(`Initializing with Twitter client: ${JSON.stringify({
+            hasClient: !!twitterClient,
+            hasSearchMethod: !!(twitterClient as any).search || !!(twitterClient as any).v2?.search,
+        })}`);
 
         this.twitterPlugin = new TwitterPlugin({
             id: "twitter_worker",
@@ -75,8 +123,16 @@ export class TwitterFunctionManager {
             twitterClient: twitterClient
         });
 
+        // Validate plugin initialization
+        if (!this.twitterPlugin || !this.twitterPlugin.searchTweetsFunction) {
+            throw new Error('Failed to initialize Twitter plugin');
+        }
+
         // Test Twitter client connection
-        this.validateTwitterClient();
+        this.validateTwitterClient().catch(error => {
+            this.logger(`Failed to validate Twitter client: ${error}`);
+            throw error;
+        });
     }
 
     private async validateTwitterClient() {
@@ -98,14 +154,29 @@ export class TwitterFunctionManager {
         return new ExecutableGameFunctionResponse(status, feedback);
     }
 
-    // Wrap the Twitter functions with logging
+    // Modify postTweetFunction
     get postTweetFunction() { 
         const fn = this.twitterPlugin.postTweetFunction;
         fn.executable = async (args, logger) => {
-            this.logger(`Attempting to post tweet: ${JSON.stringify(args)}`);
-            const result = await this.twitterPlugin.postTweetFunction.executable(args, logger);
-            this.logger(`Tweet post result: ${JSON.stringify(result)}`);
-            return result;
+            try {
+                if (!await this.rateLimits.canPost()) {
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        `Rate limit reached: Can post again in ${this.rateLimits.getRemainingPosts()} minutes`
+                    );
+                }
+
+                this.logger(`Attempting to post tweet: ${JSON.stringify(args)}`);
+                const result = await this.twitterPlugin.postTweetFunction.executable(args, logger);
+                this.logger(`Tweet post result: ${JSON.stringify(result)}`);
+                return result;
+            } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                return this.createResponse(
+                    ExecutableGameFunctionStatus.Failed,
+                    `Failed to post tweet: ${errorMessage}`
+                );
+            }
         };
         return fn;
     }
@@ -115,12 +186,53 @@ export class TwitterFunctionManager {
         fn.executable = async (args, logger) => {
             try {
                 this.logger(`Searching tweets with: ${JSON.stringify(args)}`);
+                
+                // Validate query
+                if (!args.query) {
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        "Search query is required"
+                    );
+                }
+
+                // Add error handling and logging for the Twitter client
+                if (!this.twitterPlugin || !this.twitterPlugin.searchTweetsFunction) {
+                    this.logger('Twitter client or search function not properly initialized');
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        "Twitter client not properly initialized"
+                    );
+                }
+
                 const result = await this.twitterPlugin.searchTweetsFunction.executable(args, logger);
-                this.logger(`Search result: ${JSON.stringify(result)}`);
-                return this.createResponse(
-                    result.status,
-                    result.feedback || 'Search completed successfully'
-                );
+                
+                // Add detailed logging
+                this.logger(`Raw search result: ${JSON.stringify(result)}`);
+                
+                if (result.status === ExecutableGameFunctionStatus.Failed) {
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        `Search failed: ${result.feedback}`
+                    );
+                }
+
+                // Parse and validate the tweets
+                try {
+                    const tweets = JSON.parse(result.feedback);
+                    if (!Array.isArray(tweets)) {
+                        throw new Error('Invalid tweet data format');
+                    }
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        JSON.stringify(tweets)
+                    );
+                } catch (parseError) {
+                    this.logger(`Failed to parse tweet data: ${parseError}`);
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        `Failed to parse tweet data: ${result.feedback}`
+                    );
+                }
             } catch (error: unknown) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                 this.logger(`Search error: ${errorMessage}`);
@@ -133,10 +245,18 @@ export class TwitterFunctionManager {
         return fn;
     }
 
+    // Modify replyToTweetFunction
     get replyToTweetFunction() { 
         const fn = this.twitterPlugin.replyTweetFunction;
         fn.executable = async (args, logger) => {
             try {
+                if (!await this.rateLimits.canReply()) {
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        `Rate limit reached: Can reply again in ${this.rateLimits.getRemainingReplies()} minutes`
+                    );
+                }
+
                 this.logger(`Attempting to reply to tweet: ${JSON.stringify(args)}`);
                 
                 // First try to find the specific tweet
