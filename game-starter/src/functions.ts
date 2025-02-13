@@ -96,11 +96,13 @@ class TwitterRateLimits {
 
 // Create a class to handle Twitter functionality
 export class TwitterFunctionManager {
+    private client: TwitterClient;
     private twitterPlugin: TwitterPlugin;
     private logger: (msg: string) => void;
     private rateLimits: TwitterRateLimits;
 
     constructor(twitterClient: TwitterClient) {
+        this.client = twitterClient;
         this.logger = (msg: string) => {
             console.log('🐦 Twitter Operation:', msg);
         };

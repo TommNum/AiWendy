@@ -8,13 +8,18 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "tsup": "tsup src/index.ts --dts --format cjs,esm --out-dir dist"
+    "tsup": "tsup src/index.ts --dts --format cjs,esm --out-dir dist",
+    "start:pm2": "pm2 start ecosystem.config.js",
+    "stop:pm2": "pm2 stop game-starter",
+    "restart:pm2": "pm2 restart game-starter",
+    "logs:pm2": "pm2 logs game-starter"
   },
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.3",
+    "pm2": "^5.4.3",
     "ts-node-dev": "^2.0.0",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"

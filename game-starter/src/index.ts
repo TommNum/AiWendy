@@ -6,6 +6,7 @@ import { AxiosError } from 'axios';
 import dns from 'dns/promises';
 import path from 'path';
 import { initializeWorkers, createAgent } from "./worker";
+import './startup';
 
 // Load environment variables with explicit path
 dotenv.config({ path: '/Users/tripp/WenProd/AiWendy/game-starter/.env' });
@@ -136,3 +137,8 @@ async function main() {
 console.log("GAME SDK Starter Project is running!");
 
 main();
+
+// Export any necessary items
+export * from './worker';
+export * from './functions';
+export * from './agent';

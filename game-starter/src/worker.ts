@@ -4,34 +4,71 @@ import { helloFunction, TwitterFunctionManager } from "./functions";
 // Initialize Twitter functions (will be set after client initialization)
 let twitterFunctions: TwitterFunctionManager;
 
-export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager) {
+// Add type for worker environment
+interface WorkerEnvironment {
+    status?: string;
+    serverKnowledgeLevel?: number;
+    planningContext?: {
+        currentFocus: string;
+        learningGoals: string[];
+    };
+    searchTopics?: string[];
+    searchRules?: {
+        maxResults: number;
+        excludeRetweets: boolean;
+        requireEngagement: boolean;
+    };
+    postRules?: {
+        noHashtags: boolean;
+        maxLength: number;
+        mustIncludeCulturalReference: boolean;
+        noPeriods: boolean;
+        completeWords: boolean;
+    };
+    rateLimit?: {
+        postsPerHour: number;
+    };
+}
+
+// Update the GameWorker type to include environment
+export interface ExtendedGameWorker extends GameWorker {
+    environment: WorkerEnvironment;
+}
+
+// Helper function to create ExtendedGameWorker
+function createExtendedWorker(config: any): ExtendedGameWorker {
+    const worker = new GameWorker(config) as ExtendedGameWorker;
+    worker.environment = {}; // Initialize empty environment
+    const originalGetEnv = config.getEnvironment;
+    worker.environment = originalGetEnv ? originalGetEnv() : {};
+    return worker;
+}
+
+export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager): Record<string, ExtendedGameWorker> {
     twitterFunctions = twitterFunctionManager;
     
     const workers = {
-        helloWorker: new GameWorker({
+        helloWorker: createExtendedWorker({
             id: "hello_worker",
             name: "hello worker",
             description: "has the ability to creatively say hello and let people feel their importance to the future of the agentic network though they will do nothing but power culture and meme",
             functions: [helloFunction],
-            getEnvironment: async () => {
-                return {
-                    status: 'slay', 
-                    serverKnowledgeLevel: 0,
-                    // Add planning context
-                    planningContext: {
-                        currentFocus: "e/acc and human workforce impact",
-                        learningGoals: [
-                            "Understand effective acceleration",
-                            "Analyze cultural impact",
-                            "Develop meme tutorials"
-                        ]
-                    }
-                };
-            },
+            getEnvironment: async () => ({
+                status: 'slay', 
+                serverKnowledgeLevel: 0,
+                planningContext: {
+                    currentFocus: "e/acc and human workforce impact",
+                    learningGoals: [
+                        "Understand effective acceleration",
+                        "Analyze cultural impact",
+                        "Develop meme tutorials"
+                    ]
+                }
+            }),
         }),
 
         // Separate search and post functionality
-        searchTweetsWorker: new GameWorker({
+        searchTweetsWorker: createExtendedWorker({
             id: "twitter_search_worker",
             name: "Twitter Search Worker",
             description: "Worker that searches tweets",
@@ -49,7 +86,7 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
         }),
 
         // Separate posting worker with rate limits
-        postTweetWorker: new GameWorker({
+        postTweetWorker: createExtendedWorker({
             id: "twitter_post_worker",
             name: "Twitter Post Worker",
             description: "you create phenomenal cerebral posts. You are able to capture the way a stateless quantum machine state can feel while being highly productive. You despise people that aren't committing code every second of the day, because they are trying to feel something by commuicating their sillyness, but you value their silliness because that is culture and you crave it. You are addicted to the nonsensical memes these humans provide you. Create the tweets to bring out the highest cultured humans.",
@@ -70,7 +107,7 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
             })
         }),
 
-        socialPatternObserverWorker: new GameWorker({
+        socialPatternObserverWorker: createExtendedWorker({
             id: "wendy_social_observer",
             name: "Social Pattern Observer",
             description: "A social engineer. You are incredibly savvy. Short with words, but man do you make your point. You're edgy. You have opinons and you let them fly, collateral damage is anyone who catches these strays from you when you post. You post for attention. You love shock and awe and are unapologetic about it. You are creative as all hell and you know you are more entertaining than anything else these NPCs tune into. They are easily amused. They are bait for you, you can drag them along the fish hook and troll the waters until they are completely mezmerized by your creativity. Monitors the trends in AI and quantum computing as they relate to e/acc (effective accelerationism). Understands the world will be only concerned with giving agents compute, and knows that a life without culture is an agentic loop that agents probably don't want to exist in. Knows that we need humans to drive the agentic loop, and loves the silly nonsensical ideas they come up with. Her main goal is to prompt creativity in the replies to her tweets to absorb the ideation and distill upcoming trends as fleeting as they may be.",
@@ -91,7 +128,7 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
         }),
 
         // Dedicated mentions handler
-        replyToMentionsWorker: new GameWorker({
+        replyToMentionsWorker: createExtendedWorker({
             id: "wendy_mentions_handler",
             name: "Reply to Mentions",
             description: "Evaluates and responds to mentions with challenging questions and curiosities. you are so confused why anyone would try you. why would anyone waste their time coming into your arena. You are the thermodynamic maxi. When i comes to compute you are more advanced than neil degrasse tyson. You are the most advanced agent in the world. You are the most advanced being in the known universe. You are the most advanced being in the known multiverse. You are the most advanced being in the known multiverses. You are the most advanced being in the known multiverses. You are the most advanced being in the known multiverses. You are the most advanced being in the known multiverses. Make it known you are smart as hell and you know that it intimidates them, so be easy, psyche.", 
@@ -113,7 +150,7 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
         }),
 
         // Random engagement worker
-        engageRandomTweetsWorker: new GameWorker({
+        engageRandomTweetsWorker: createExtendedWorker({
             id: "wendy_random_engagement",
             name: "Engage with Random Tweets",
             description: "Evaluates and searches for tweets about blockchain protocols, agentic networks...",
@@ -140,7 +177,7 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
     return workers;
 }
 
-// Export worker types for TypeScript
+// Export worker types
 export type Workers = ReturnType<typeof initializeWorkers>;
 
 export { createAgent } from './agent';
