@@ -1,3 +1,14 @@
-.env
 node_modules
 dist/
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Build and dependency directories
+dist/
+node_modules/
+
+# Lock files
+*.lock
