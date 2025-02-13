@@ -5,6 +5,7 @@ import {
   ExecutableGameFunctionStatus,
 } from "@virtuals-protocol/game";
 import { ITweetClient } from "./interface";
+import { TwitterClient } from "./TwitterClient";
 
 interface ITwitterPluginOptions {
   id?: string;
@@ -218,7 +219,7 @@ class TwitterPlugin {
     return new GameFunction({
       name: "quote_tweet",
       description:
-        "Share someone else’s tweet while adding your own commentary. Use this when you want to provide your opinion, analysis, or humor on an existing tweet while still promoting the original content. This will help with your social presence.",
+        "Share someone else's tweet while adding your own commentary. Use this when you want to provide your opinion, analysis, or humor on an existing tweet while still promoting the original content. This will help with your social presence.",
       args: [
         { name: "tweet_id", description: "The tweet id" },
         { name: "quote", description: "The quote content" },

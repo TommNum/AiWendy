@@ -21,3 +21,10 @@ export interface ITweetClient {
   ): Promise<TweetV2PostTweetResult>;
   me(): Promise<UserV2Result>;
 }
+
+export interface ICredential {
+  apiKey: string;
+  apiSecret: string;
+  accessToken: string;
+  accessTokenSecret: string;
+}

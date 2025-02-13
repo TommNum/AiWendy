@@ -139,37 +139,51 @@ export class TwitterFunctionManager {
             try {
                 this.logger(`Attempting to reply to tweet: ${JSON.stringify(args)}`);
                 
+                // First try to find the specific tweet
                 const searchResult = await this.twitterPlugin.searchTweetsFunction.executable(
                     { query: `id:${args.tweet_id}` },
                     logger
                 );
                 
                 if (searchResult.status === ExecutableGameFunctionStatus.Failed) {
-                    return this.createResponse(
-                        ExecutableGameFunctionStatus.Failed,
-                        'Tweet not found or inaccessible'
+                    // If the specific tweet is not found, try to find a recent relevant tweet
+                    const newSearchResult = await this.twitterPlugin.searchTweetsFunction.executable(
+                        { query: "blockchain protocols OR agentic networks -is:retweet" },
+                        logger
                     );
+
+                    if (newSearchResult.status === ExecutableGameFunctionStatus.Done) {
+                        const tweets = JSON.parse(newSearchResult.feedback);
+                        if (tweets && tweets.length > 0) {
+                            // Update the tweet_id to the most recent relevant tweet
+                            args.tweet_id = tweets[0].tweetId;
+                            this.logger(`Updating to reply to tweet: ${args.tweet_id}`);
+                        } else {
+                            return this.createResponse(
+                                ExecutableGameFunctionStatus.Failed,
+                                'No suitable tweets found to reply to'
+                            );
+                        }
+                    } else {
+                        return this.createResponse(
+                            ExecutableGameFunctionStatus.Failed,
+                            'Failed to find alternative tweet'
+                        );
+                    }
                 }
 
+                // Attempt the reply
                 const result = await this.twitterPlugin.replyTweetFunction.executable(args, logger);
+                this.logger(`Reply result: ${JSON.stringify(result)}`);
                 
-                if (result.status === ExecutableGameFunctionStatus.Failed) {
-                    const errorMsg = result.feedback || 'Failed to reply to tweet';
-                    this.logger(`Reply failed: ${errorMsg}`);
-                    return this.createResponse(
-                        ExecutableGameFunctionStatus.Failed,
-                        errorMsg
-                    );
-                }
-
-                this.logger(`Reply successful: ${JSON.stringify(result)}`);
                 return this.createResponse(
-                    ExecutableGameFunctionStatus.Done,
-                    `Successfully replied to tweet ${args.tweet_id}`
+                    result.status,
+                    result.status === ExecutableGameFunctionStatus.Done 
+                        ? `Successfully replied to tweet ${args.tweet_id}`
+                        : `Failed to reply to tweet: ${result.feedback}`
                 );
             } catch (error: unknown) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger(`Reply error: ${errorMessage}`);
                 return this.createResponse(
                     ExecutableGameFunctionStatus.Failed,
                     `Failed to reply to tweet: ${errorMessage}`

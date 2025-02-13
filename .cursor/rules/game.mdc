@@ -1,0 +1,15 @@
+---
+description: Twitter GAME
+globs: 
+---
+
+# GAME Framework Rules - Twitter 
+
+- Follow the [README.md](mdc:plugins/twitterPlugin/README.md) to implement the twitter feature within the game framework
+- Utilize the examples in the [twitter.ts](mdc:examples/twitter.ts) as a template to create the proper twitter file for our objective 
+- Use the following example as a tempalte [worker.ts](mdc:game-starter/src/worker.ts)
+- Use the following example as a template [agent.ts](mdc:game-starter/src/agent.ts)
+- Use the following example as a template [function.ts](mdc:src/function.ts)
+- Use the following example as a template [index.ts](mdc:game-starter/src/index.ts)
+
+
