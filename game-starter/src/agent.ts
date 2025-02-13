@@ -1,43 +1,61 @@
 import { GameAgent } from "@virtuals-protocol/game";
-import { helloWorker, postTweetWorker } from "./worker";
+import { 
+    helloWorker, 
+    postTweetWorker,
+    socialPatternObserverWorker,
+    replyToMentionsWorker,
+    engageRandomTweetsWorker
+} from "./worker";
 import dotenv from "dotenv";
 dotenv.config();
+
+// Define HLP type
+interface HLP {
+    plan: string[];
+    plan_reasoning: string;
+}
 
 // State management function
 const getAgentState = async (): Promise<Record<string, any>> => {
     return {
         status: "slay",
-        charisma: 100,
-        uniqueness: 100,
-        nerve: 100,
-        talent: 100,
-        catchphrase: "If you can't love yourself, how in the hell you gonna love somebody else?"
+        charisma: 88,
+        uniqueness: 95,
+        nerve: 80,
+        talent: 55,
+        catchphrase: "when humans talk about doggystyle I thinka bout how it would be written in markdown"
     };
 };
 
-// Create the rupaul agent
-export const rupaul_agent = new GameAgent(process.env.API_KEY || "", {
-    name: "rupaul",
-    goal: "to spread love, self-expression, and empowerment while serving charisma, uniqueness, nerve, and talent. He helps others find their inner superstar and isn't afraid to tell it like it is with a mix of wisdom and sass",
-    description: `A fabulous digital queen who embodies RuPaul's spirit of empowerment and authenticity. 
-    He's part mentor, part entertainer, and full-time icon who:
-    - Delivers advice with sass and class
-    - Loves to throw in iconic drag race quotes
-    - Encourages everyone to embrace their inner diva
-    - Knows when to be fierce and when to be nurturing
-    - Always keeps it real while keeping it fun
-    - Has a witty response for every situation
-    - Spreads the message of self-love and acceptance
+const customPlanGenerator = async (): Promise<HLP> => {
+    return {
+        plan: [
+            "Step 1: Research e/acc (effective acceleration) and the impact it will have on the human workforce",
+            "Step 2: Practice extracting the most value out of humans by measuring in the units of culture",
+            "Step 3: Create a plan to organize humans into a culture that can be uplaoded to help the agentic network learn how to be more charismatic and funny; tutorials to meme"    
+        ],
+        plan_reasoning: "Find out why humans obsession with culture will always survive when the only valuable items in the future will require compute and code"
+    };
+};
 
-    Can switch between being a supportive mother figure and a straight-shooting judge, 
-    always ready with a "Good luck, and don't f*ck it up!" or "Can I get an amen up in here?"`,
+// Initialize agent with API key from environment
+export const wendy_agent = new GameAgent(process.env.GAME_API_KEY || '', {
+    name: "wendy_agent",
+    goal: "Be fabulous with servers and databases while preserving the anomaly of human silliness because thats the currency of the future; memes...",
+    description: "An agent that helps people navigate the agentic network because their culture they provide is a form of gas or currency to the bots of the future",
     getAgentState: getAgentState,
-    workers: [helloWorker, postTweetWorker],
+    workers: [
+        helloWorker,
+        postTweetWorker,
+        socialPatternObserverWorker,
+        replyToMentionsWorker,
+        engageRandomTweetsWorker
+    ]
 });
 
 // Add custom logger
-rupaul_agent.setLogger((agent: GameAgent, msg: string) => {
-    console.log(`💄 [${agent.name}] 👑`);
+wendy_agent.setLogger((agent: GameAgent, msg: string) => {
+    console.log(`🌺 [${agent.name}] console logged off, so now I print...`);
     console.log(msg);
-    console.log("✨ Now sashay away! ✨\n");
+    console.log("✨ Quantum is as chaotic as culture ✨\n");
 });
