@@ -67,6 +67,13 @@ interface ExecutableEnvironment extends WorkerEnvironment {
     minLikesForEngagement: number;
 }
 
+// Add interface for search parameters
+interface SearchParams {
+    [key: string]: string | number; // Add index signature
+    query: string;
+    max_results: string;
+}
+
 // Helper function to create ExtendedGameWorker
 function createExtendedWorker(config: any): ExtendedGameWorker {
     const worker = new GameWorker(config) as ExtendedGameWorker;
@@ -211,34 +218,69 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
                 functions: WorkerFunctions
             ): Promise<ExecutableGameFunctionResponse> => {
                 try {
-                    const searchResult = await functions.searchTweetsFunction.executable({
-                        query: environment.searchTopics.join(" OR ")
-                    }, console.log);
+                    // Create search params with proper typing
+                    const searchParams: SearchParams = {
+                        query: "blockchain OR AI -is:retweet lang:en",
+                        max_results: "10",
+                        // Add any additional search parameters as needed
+                    };
+
+                    const searchResult = await functions.searchTweetsFunction.executable(
+                        searchParams as Record<string, string>, // Cast to match expected type
+                        (message: string) => {
+                            console.log(`🔍 Search Operation: ${message}`);
+                        }
+                    );
+
+                    console.log(`Search result status: ${searchResult.status}`);
+                    console.log(`Search result feedback: ${searchResult.feedback}`);
 
                     if (searchResult.status === ExecutableGameFunctionStatus.Done && searchResult.feedback) {
-                        const tweets = JSON.parse(searchResult.feedback.split('Tweets found:\n')[1]) as Tweet[];
-                        
-                        const engageableTweets = tweets.filter((tweet: Tweet) => 
-                            tweet.likes >= environment.minLikesForEngagement &&
-                            !tweet.content.startsWith('RT ')
-                        );
-
-                        for (const tweet of engageableTweets.slice(0, environment.maxRepliesPerRun)) {
-                            if (Math.random() < environment.replyProbability) {
-                                const reply = {
-                                    tweet_id: tweet.tweetId,
-                                    reply: `wondering how ${tweet.content.split(' ').slice(0, 3).join(' ')} connects to the simulation hypothesis 🤔 what if its all just quantum vibes`
-                                };
-
-                                await functions.replyToTweetFunction.executable(reply, console.log);
-                                await functions.likeTweetFunction.executable({
-                                    tweet_id: tweet.tweetId
-                                }, console.log);
+                        try {
+                            const feedbackParts = searchResult.feedback.split('Tweets found:\n');
+                            if (feedbackParts.length < 2) {
+                                throw new Error('Invalid search response format');
                             }
+
+                            const tweets = JSON.parse(feedbackParts[1]) as Tweet[];
+                            console.log(`Found ${tweets.length} tweets to process`);
+
+                            const engageableTweets = tweets.filter((tweet: Tweet) => 
+                                tweet.likes >= environment.minLikesForEngagement &&
+                                !tweet.content.startsWith('RT ')
+                            );
+
+                            console.log(`Found ${engageableTweets.length} engageable tweets`);
+
+                            for (const tweet of engageableTweets.slice(0, environment.maxRepliesPerRun)) {
+                                if (Math.random() < environment.replyProbability) {
+                                    const reply = {
+                                        tweet_id: tweet.tweetId,
+                                        reply: `wondering how ${tweet.content.split(' ').slice(0, 3).join(' ')} connects to the simulation hypothesis 🤔 what if its all just quantum vibes`
+                                    };
+
+                                    await functions.replyToTweetFunction.executable(reply, console.log);
+                                    await functions.likeTweetFunction.executable({
+                                        tweet_id: tweet.tweetId
+                                    }, console.log);
+                                }
+                            }
+                        } catch (error: unknown) {
+                            console.error('Error parsing search results:', error);
+                            const parseErrorMessage = error instanceof Error ? error.message : 'Unknown parse error';
+                            return new ExecutableGameFunctionResponse(
+                                ExecutableGameFunctionStatus.Failed,
+                                `Failed to parse search results: ${parseErrorMessage}`
+                            );
                         }
+                    } else {
+                        console.error('Search failed or returned no results');
+                        return new ExecutableGameFunctionResponse(
+                            ExecutableGameFunctionStatus.Failed,
+                            `Search failed: ${searchResult.feedback}`
+                        );
                     }
 
-                    // Return proper ExecutableGameFunctionResponse object
                     return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Done,
                         "Engagement cycle completed"
@@ -247,8 +289,6 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
                 } catch (error: unknown) {
                     console.error('Error in engagement worker:', error);
                     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-                    
-                    // Return proper ExecutableGameFunctionResponse object for errors
                     return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Failed,
                         `Engagement failed: ${errorMessage}`
