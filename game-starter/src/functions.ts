@@ -6,6 +6,7 @@ import {
 import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
 import { TwitterClient } from "@virtuals-protocol/game-twitter-plugin";
 import { RateLimiter } from "./rateLimiter";
+import dotenv from "dotenv";
 
 // Debug environment variables (keep this for debugging)
 console.log('Twitter Environment Variables in functions.ts:', {
@@ -103,24 +104,46 @@ export class TwitterFunctionManager {
         this.logger = (msg: string) => {
             console.log('🐦 Twitter Operation:', msg);
         };
+
+        // Initialize rate limits
         this.rateLimits = new TwitterRateLimits(this.logger);
 
-        // Validate Twitter client
-        if (!twitterClient) {
-            throw new Error('Twitter client is required');
+        // Load environment variables if not already loaded
+        if (!process.env.TWITTER_API_KEY) {
+            dotenv.config();
         }
 
-        // Log Twitter client state
-        this.logger(`Initializing with Twitter client: ${JSON.stringify({
-            hasClient: !!twitterClient,
-            hasSearchMethod: !!(twitterClient as any).search || !!(twitterClient as any).v2?.search,
+        // Validate Twitter credentials before initializing client
+        const credentials = {
+            apiKey: process.env.TWITTER_API_KEY || '',
+            apiSecretKey: process.env.TWITTER_API_SECRET || '',
+            accessToken: process.env.TWITTER_ACCESS_TOKEN || '',
+            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET || ''
+        };
+
+        this.logger(`Initializing with credentials: ${JSON.stringify({
+            hasApiKey: !!credentials.apiKey,
+            hasApiSecret: !!credentials.apiSecretKey,
+            hasAccessToken: !!credentials.accessToken,
+            hasAccessTokenSecret: !!credentials.accessTokenSecret
         })}`);
 
+        if (!credentials.apiKey || !credentials.apiSecretKey || 
+            !credentials.accessToken || !credentials.accessTokenSecret) {
+            throw new Error('Missing required Twitter credentials');
+        }
+
+        // Initialize Twitter plugin with validated credentials
         this.twitterPlugin = new TwitterPlugin({
             id: "twitter_worker",
             name: "Twitter Worker",
             description: "Worker for handling Twitter operations",
-            twitterClient: twitterClient
+            twitterClient: twitterClient || new TwitterClient({
+                apiKey: credentials.apiKey,
+                apiSecretKey: credentials.apiSecretKey,
+                accessToken: credentials.accessToken,
+                accessTokenSecret: credentials.accessTokenSecret
+            } as const)
         });
 
         // Validate plugin initialization
@@ -128,25 +151,28 @@ export class TwitterFunctionManager {
             throw new Error('Failed to initialize Twitter plugin');
         }
 
-        // Test Twitter client connection
-        this.validateTwitterClient().catch(error => {
-            this.logger(`Failed to validate Twitter client: ${error}`);
+        // Test search functionality
+        this.validateTwitterSearch().catch(error => {
+            this.logger(`Failed to validate Twitter search: ${error}`);
             throw error;
         });
     }
 
-    private async validateTwitterClient() {
+    // Add validation method for Twitter search
+    private async validateTwitterSearch(): Promise<void> {
         try {
-            // Use public methods instead of accessing private twitterClient
-            const testResponse = await this.twitterPlugin.searchTweetsFunction.executable(
+            const testResult = await this.twitterPlugin.searchTweetsFunction.executable(
                 { query: "test" },
                 this.logger
             );
-            this.logger('Twitter client validated successfully');
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-            this.logger(`Twitter client validation failed: ${errorMessage}`);
-            throw error;
+            
+            if (testResult.status === ExecutableGameFunctionStatus.Failed) {
+                throw new Error(`Search validation failed: ${testResult.feedback}`);
+            }
+            
+            this.logger('Twitter search functionality validated successfully');
+        } catch (error) {
+            throw new Error(`Failed to validate Twitter search: ${error}`);
         }
     }
 
@@ -187,7 +213,6 @@ export class TwitterFunctionManager {
             try {
                 this.logger(`Searching tweets with: ${JSON.stringify(args)}`);
                 
-                // Validate query
                 if (!args.query) {
                     return this.createResponse(
                         ExecutableGameFunctionStatus.Failed,
@@ -195,42 +220,24 @@ export class TwitterFunctionManager {
                     );
                 }
 
-                // Add error handling and logging for the Twitter client
-                if (!this.twitterPlugin || !this.twitterPlugin.searchTweetsFunction) {
-                    this.logger('Twitter client or search function not properly initialized');
-                    return this.createResponse(
-                        ExecutableGameFunctionStatus.Failed,
-                        "Twitter client not properly initialized"
-                    );
-                }
-
+                // Use the plugin's search function directly
                 const result = await this.twitterPlugin.searchTweetsFunction.executable(args, logger);
                 
-                // Add detailed logging
-                this.logger(`Raw search result: ${JSON.stringify(result)}`);
-                
                 if (result.status === ExecutableGameFunctionStatus.Failed) {
-                    return this.createResponse(
-                        ExecutableGameFunctionStatus.Failed,
-                        `Search failed: ${result.feedback}`
-                    );
+                    this.logger(`Search failed: ${result.feedback}`);
+                    return result;
                 }
 
-                // Parse and validate the tweets
                 try {
-                    const tweets = JSON.parse(result.feedback);
-                    if (!Array.isArray(tweets)) {
-                        throw new Error('Invalid tweet data format');
-                    }
+                    const tweets = JSON.parse(result.feedback.split('Tweets found:\n')[1]);
                     return this.createResponse(
                         ExecutableGameFunctionStatus.Done,
                         JSON.stringify(tweets)
                     );
                 } catch (parseError) {
-                    this.logger(`Failed to parse tweet data: ${parseError}`);
                     return this.createResponse(
                         ExecutableGameFunctionStatus.Failed,
-                        `Failed to parse tweet data: ${result.feedback}`
+                        `Failed to parse tweet data: ${parseError}`
                     );
                 }
             } catch (error: unknown) {
@@ -273,15 +280,26 @@ export class TwitterFunctionManager {
                     );
 
                     if (newSearchResult.status === ExecutableGameFunctionStatus.Done) {
-                        const tweets = JSON.parse(newSearchResult.feedback);
-                        if (tweets && tweets.length > 0) {
-                            // Update the tweet_id to the most recent relevant tweet
-                            args.tweet_id = tweets[0].tweetId;
-                            this.logger(`Updating to reply to tweet: ${args.tweet_id}`);
-                        } else {
+                        try {
+                            // Extract just the JSON part after "Tweets found:\n"
+                            const jsonStr = newSearchResult.feedback.split('Tweets found:\n')[1];
+                            const tweets = jsonStr ? JSON.parse(jsonStr) : null;
+                            
+                            if (tweets && tweets.length > 0) {
+                                // Update the tweet_id to the most recent relevant tweet
+                                args.tweet_id = tweets[0].tweetId;
+                                this.logger(`Updating to reply to tweet: ${args.tweet_id}`);
+                            } else {
+                                return this.createResponse(
+                                    ExecutableGameFunctionStatus.Failed,
+                                    'No suitable tweets found to reply to'
+                                );
+                            }
+                        } catch (parseError) {
+                            this.logger(`Failed to parse tweet data: ${parseError}`);
                             return this.createResponse(
                                 ExecutableGameFunctionStatus.Failed,
-                                'No suitable tweets found to reply to'
+                                `Failed to parse tweet data: ${parseError}`
                             );
                         }
                     } else {
@@ -290,6 +308,14 @@ export class TwitterFunctionManager {
                             'Failed to find alternative tweet'
                         );
                     }
+                }
+
+                // Add validation for reply content
+                if (!args.reply || typeof args.reply !== 'string') {
+                    return this.createResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        'Reply content is required and must be a string'
+                    );
                 }
 
                 // Attempt the reply
@@ -304,6 +330,7 @@ export class TwitterFunctionManager {
                 );
             } catch (error: unknown) {
                 const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                this.logger(`Reply error: ${errorMessage}`);
                 return this.createResponse(
                     ExecutableGameFunctionStatus.Failed,
                     `Failed to reply to tweet: ${errorMessage}`

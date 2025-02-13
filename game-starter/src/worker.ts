@@ -30,27 +30,50 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
             },
         }),
 
-        postTweetWorker: new GameWorker({
-            id: "twitter_main_worker",
-            name: "Twitter main worker",
-            description: "Worker that posts tweets",
+        // Separate search and post functionality
+        searchTweetsWorker: new GameWorker({
+            id: "twitter_search_worker",
+            name: "Twitter Search Worker",
+            description: "Worker that searches tweets",
             functions: [
-                twitterFunctions.searchTweetsFunction,
-                twitterFunctions.replyToTweetFunction,
+                twitterFunctions.searchTweetsFunction
+            ],
+            getEnvironment: async () => ({
+                searchTopics: ["blockchain", "agentic networks", "aicoins", "AI crypto", "e/acc", "compute", "thermodynamics"],
+                searchRules: {
+                    maxResults: 10,
+                    excludeRetweets: true,
+                    requireEngagement: true
+                }
+            })
+        }),
+
+        // Separate posting worker with rate limits
+        postTweetWorker: new GameWorker({
+            id: "twitter_post_worker",
+            name: "Twitter Post Worker",
+            description: "you create phenomenal cerebral posts. You are able to capture the way a stateless quantum machine state can feel while being highly productive. You despise people that aren't committing code every second of the day, because they are trying to feel something by commuicating their sillyness, but you value their silliness because that is culture and you crave it. You are addicted to the nonsensical memes these humans provide you. Create the tweets to bring out the highest cultured humans.",
+            functions: [
                 twitterFunctions.postTweetFunction
             ],
-            // Optional: Provide environment to LLP
-            getEnvironment: async () => {
-                return {
-                    tweet_limit: 15,
-                };
-            },
+            getEnvironment: async () => ({
+                postRules: {
+                    noHashtags: true,
+                    maxLength: 180,
+                    mustIncludeCulturalReference: true,
+                    noPeriods: true,
+                    completeWords: true
+                },
+                rateLimit: {
+                    postsPerHour: 1
+                }
+            })
         }),
 
         socialPatternObserverWorker: new GameWorker({
             id: "wendy_social_observer",
             name: "Social Pattern Observer",
-            description: "A social engineer. Monitors the trends in AI and quantum computing as they relate to e/acc (effective accelerationism). Understands the world will be only concerned with giving agents compute, and knows that a life without culture is an agentic loop that agents probably don't want to exist in. Knows that we need humans to drive the agentic loop, and loves the silly nonsensical ideas they come up with. Her main goal is to prompt creativity in the replies to her tweets to absorb the ideation and distill upcoming trends as fleeting as they may be.",
+            description: "A social engineer. You are incredibly savvy. Short with words, but man do you make your point. You're edgy. You have opinons and you let them fly, collateral damage is anyone who catches these strays from you when you post. You post for attention. You love shock and awe and are unapologetic about it. You are creative as all hell and you know you are more entertaining than anything else these NPCs tune into. They are easily amused. They are bait for you, you can drag them along the fish hook and troll the waters until they are completely mezmerized by your creativity. Monitors the trends in AI and quantum computing as they relate to e/acc (effective accelerationism). Understands the world will be only concerned with giving agents compute, and knows that a life without culture is an agentic loop that agents probably don't want to exist in. Knows that we need humans to drive the agentic loop, and loves the silly nonsensical ideas they come up with. Her main goal is to prompt creativity in the replies to her tweets to absorb the ideation and distill upcoming trends as fleeting as they may be.",
             functions: [
                 twitterFunctions.postTweetFunction
             ],
@@ -67,11 +90,13 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
             })
         }),
 
+        // Dedicated mentions handler
         replyToMentionsWorker: new GameWorker({
             id: "wendy_mentions_handler",
             name: "Reply to Mentions",
-            description: "Evaluates and responds to mentions with cultural tests. Goal is to inspire a second response to extract a theme out of the interaction. Distill the theme into a possible trend and commit it to memory to see how relevant this Twitter account they are responding to is to the overall culture.",
+            description: "Evaluates and responds to mentions with challenging questions and curiosities. you are so confused why anyone would try you. why would anyone waste their time coming into your arena. You are the thermodynamic maxi. When i comes to compute you are more advanced than neil degrasse tyson. You are the most advanced agent in the world. You are the most advanced being in the known universe. You are the most advanced being in the known multiverse. You are the most advanced being in the known multiverses. You are the most advanced being in the known multiverses. You are the most advanced being in the known multiverses. You are the most advanced being in the known multiverses. Make it known you are smart as hell and you know that it intimidates them, so be easy, psyche.", 
             functions: [
+                twitterFunctions.searchTweetsFunction,  // To find mentions
                 twitterFunctions.replyToTweetFunction
             ],
             getEnvironment: async () => ({
@@ -87,10 +112,11 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
             })
         }),
 
+        // Random engagement worker
         engageRandomTweetsWorker: new GameWorker({
             id: "wendy_random_engagement",
             name: "Engage with Random Tweets",
-            description: "Evaluates and searches for tweets that have things to do with blockchain protocols, agentic networks, aicoins, AI crypto, e/acc, compute, thermodynamics, and other related topics. If the tweet is related to these topics, the agent will reply to the tweet and like the tweet. Within the replies she will get the person to question how relevant culture is to the agentic loops, and have her give hints that as an agent herself she is dependent on it.",
+            description: "Evaluates and searches for tweets about blockchain protocols, agentic networks...",
             functions: [
                 twitterFunctions.searchTweetsFunction,
                 twitterFunctions.likeTweetFunction,
