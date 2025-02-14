@@ -1,4 +1,4 @@
-import { GameWorker, GameFunction, ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
+import { GameWorker, GameFunction, ExecutableGameFunctionResponse, ExecutableGameFunctionStatus, GameAgent } from "@virtuals-protocol/game";
 import { helloFunction, TwitterFunctionManager } from "./functions";
 
 // Initialize Twitter functions (will be set after client initialization)
@@ -40,6 +40,9 @@ interface WorkerFunctions {
     searchTweetsFunction: GameFunction<any>;
     replyToTweetFunction: GameFunction<any>;
     likeTweetFunction: GameFunction<any>;
+    getDmEventsFunction: GameFunction<any>;
+    sendDmReplyFunction: GameFunction<any>;
+    getDmConversationFunction: GameFunction<any>;
 }
 
 // Add interface for tweet data
@@ -65,6 +68,26 @@ interface ExecutableEnvironment extends WorkerEnvironment {
     replyProbability: number;
     maxRepliesPerRun: number;
     minLikesForEngagement: number;
+    conversationLimits: {
+        maxRepliesPerSession: number;
+        cooldownPeriodHours: number;
+    };
+    interviewTopics: string[];
+    conversationState: Map<string, {
+        replyCount: number;
+        lastInteractionTime: number | null;
+        onCooldown: boolean;
+        currentTopic: string;
+    }>;
+    activeConversations: Set<string>;
+    responseTemplates: {
+        initial: string;
+        followUp: string;
+        technical: string;
+        cultural: string;
+        closing: string;
+        error?: string;
+    };
 }
 
 // Add interface for search parameters
@@ -292,6 +315,96 @@ export function initializeWorkers(twitterFunctionManager: TwitterFunctionManager
                     return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Failed,
                         `Engagement failed: ${errorMessage}`
+                    );
+                }
+            }
+        }),
+
+        dmManagerWorker: createExtendedWorker({
+            id: "dm_manager_worker",
+            name: "DM Interview Manager",
+            description: "Manages DM conversations to interview individuals",
+            functions: [
+                twitterFunctions.getDmEventsFunction,
+                twitterFunctions.sendDmReplyFunction,
+            ],
+            executable: async (
+                args: Record<string, unknown>,
+                environment: ExecutableEnvironment,
+                functions: WorkerFunctions,
+                agent?: GameAgent
+            ): Promise<ExecutableGameFunctionResponse> => {
+                try {
+                    const dmEvents = await functions.getDmEventsFunction.executable({}, console.log);
+                    
+                    if (dmEvents.status === ExecutableGameFunctionStatus.Failed) {
+                        return dmEvents;
+                    }
+
+                    const conversations = JSON.parse(dmEvents.feedback);
+                    
+                    for (const conversation of conversations) {
+                        const conversationId = conversation.id;
+                        const state = environment.conversationState.get(conversationId) || {
+                            replyCount: 0,
+                            lastInteractionTime: Date.now(),
+                            onCooldown: false,
+                            currentTopic: environment.interviewTopics[0]
+                        };
+
+                        if (state.onCooldown && state.lastInteractionTime) {
+                            const hoursSinceLastInteraction = (Date.now() - state.lastInteractionTime) / (1000 * 60 * 60);
+                            if (hoursSinceLastInteraction < environment.conversationLimits.cooldownPeriodHours) {
+                                continue;
+                            }
+                            state.onCooldown = false;
+                        }
+
+                        if (state.replyCount >= environment.conversationLimits.maxRepliesPerSession) {
+                            await functions.sendDmReplyFunction.executable({
+                                conversation_id: conversationId,
+                                message: environment.responseTemplates.closing
+                            }, console.log);
+                            
+                            state.onCooldown = true;
+                            state.lastInteractionTime = Date.now();
+                            environment.conversationState.set(conversationId, state);
+                            continue;
+                        }
+
+                        let reply = environment.responseTemplates.initial;
+                        if (agent) {
+                            try {
+                                // Just use step with verbose flag
+                                const response = await agent.step({ verbose: true });
+                                reply = typeof response === 'string' ? response : environment.responseTemplates.initial;
+                            } catch (agentError) {
+                                console.error('Error generating agent response:', agentError);
+                                reply = environment.responseTemplates.error || "I apologize, but I need to take a moment to process. I'll get back to you soon.";
+                            }
+                        }
+
+                        await functions.sendDmReplyFunction.executable({
+                            conversation_id: conversationId,
+                            message: reply
+                        }, console.log);
+
+                        state.replyCount++;
+                        state.lastInteractionTime = Date.now();
+                        state.currentTopic = environment.interviewTopics[state.replyCount % environment.interviewTopics.length];
+                        environment.conversationState.set(conversationId, state);
+                    }
+
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "DM conversations processed successfully"
+                    );
+
+                } catch (error) {
+                    console.error('Error in DM manager:', error);
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        `DM management failed: ${error instanceof Error ? error.message : 'Unknown error'}`
                     );
                 }
             }

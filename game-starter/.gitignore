@@ -1,14 +1,14 @@
-node_modules
-dist/
-.env
-.env.local
-.env.development
-.env.test
-.env.production
+   # Environment files
+   .env
+   .env.local
+   .env.development
+   .env.test
+   .env.production
+   ecosystem.config.js  # This will ignore the file in the same directory as .gitignore
 
-# Build and dependency directories
-dist/
-node_modules/
+   # Build and dependency directories
+   dist/
+   node_modules/
 
-# Lock files
-*.lock
+   # Lock files
+   *.lock

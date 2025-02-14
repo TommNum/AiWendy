@@ -4,7 +4,8 @@
   "description": "Game starter project with PM2 integration",
   "main": "dist/index.js",
   "scripts": {
-    "test": "jest",
+    "test": "jest --detectOpenHandles",
+    "test:manual": "MANUAL_TEST=true jest dmManager.test.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "start:pm2": "pm2 start ecosystem.config.js",

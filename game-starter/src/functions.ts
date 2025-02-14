@@ -3,18 +3,24 @@ import {
     ExecutableGameFunctionResponse,
     ExecutableGameFunctionStatus,
 } from "@virtuals-protocol/game";
-import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
 import { TwitterClient } from "@virtuals-protocol/game-twitter-plugin";
+import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
 import { RateLimiter } from "./rateLimiter";
 import dotenv from "dotenv";
+import path from "path";
 
-// Debug environment variables (keep this for debugging)
-console.log('Twitter Environment Variables in functions.ts:', {
-    TWITTER_API_KEY: process.env.TWITTER_API_KEY,
-    TWITTER_API_SECRET: process.env.TWITTER_API_SECRET,
-    TWITTER_ACCESS_TOKEN: process.env.TWITTER_ACCESS_TOKEN,
-    TWITTER_ACCESS_TOKEN_SECRET: process.env.TWITTER_ACCESS_TOKEN_SECRET
-});
+// At the top of the file, before any other code
+const envPath = path.resolve(process.cwd(), '.env');
+dotenv.config({ path: envPath });
+
+// Update the debug logging
+const debugEnvVars = {
+    TWITTER_API_KEY: process.env.TWITTER_API_KEY ? '✓' : '✗',
+    TWITTER_API_SECRET: process.env.TWITTER_API_SECRET ? '✓' : '✗',
+    TWITTER_ACCESS_TOKEN: process.env.TWITTER_ACCESS_TOKEN ? '✓' : '✗',
+    TWITTER_ACCESS_TOKEN_SECRET: process.env.TWITTER_ACCESS_TOKEN_SECRET ? '✓' : '✗'
+};
+console.log('Twitter Environment Variables in functions.ts:', debugEnvVars);
 
 // Validate Twitter credentials
 const validateTwitterCredentials = () => {
@@ -94,295 +100,194 @@ class TwitterRateLimits {
     }
 }
 
+// Add type for logger
+type Logger = (message: string) => void;
+
 // Create a class to handle Twitter functionality
 export class TwitterFunctionManager {
     private client: TwitterClient;
-    private twitterPlugin: TwitterPlugin;
-    private logger: (msg: string) => void;
     private rateLimits: TwitterRateLimits;
+    private twitterPlugin: TwitterPlugin;
 
-    constructor(twitterClient: TwitterClient) {
-        this.client = twitterClient;
-        this.logger = (msg: string) => {
+    constructor(client: TwitterClient) {
+        this.client = client;
+        this.rateLimits = new TwitterRateLimits((msg: string) => {
             console.log('🐦 Twitter Operation:', msg);
-        };
-
-        // Initialize rate limits
-        this.rateLimits = new TwitterRateLimits(this.logger);
-
-        // Load environment variables if not already loaded
-        if (!process.env.TWITTER_API_KEY) {
-            dotenv.config();
-        }
-
-        // Validate Twitter credentials before initializing client
-        const credentials = {
-            apiKey: process.env.TWITTER_API_KEY || '',
-            apiSecretKey: process.env.TWITTER_API_SECRET || '',
-            accessToken: process.env.TWITTER_ACCESS_TOKEN || '',
-            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET || ''
-        };
-
-        this.logger(`Initializing with credentials: ${JSON.stringify({
-            hasApiKey: !!credentials.apiKey,
-            hasApiSecret: !!credentials.apiSecretKey,
-            hasAccessToken: !!credentials.accessToken,
-            hasAccessTokenSecret: !!credentials.accessTokenSecret
-        })}`);
-
-        if (!credentials.apiKey || !credentials.apiSecretKey || 
-            !credentials.accessToken || !credentials.accessTokenSecret) {
-            throw new Error('Missing required Twitter credentials');
-        }
-
-        // Initialize Twitter plugin with validated credentials
+        });
         this.twitterPlugin = new TwitterPlugin({
             id: "twitter_worker",
             name: "Twitter Worker",
-            description: "Worker for handling Twitter operations",
-            twitterClient: twitterClient || new TwitterClient({
-                apiKey: credentials.apiKey,
-                apiSecretKey: credentials.apiSecretKey,
-                accessToken: credentials.accessToken,
-                accessTokenSecret: credentials.accessTokenSecret
-            } as const)
-        });
-
-        // Validate plugin initialization
-        if (!this.twitterPlugin || !this.twitterPlugin.searchTweetsFunction) {
-            throw new Error('Failed to initialize Twitter plugin');
-        }
-
-        // Test search functionality
-        this.validateTwitterSearch().catch(error => {
-            this.logger(`Failed to validate Twitter search: ${error}`);
-            throw error;
+            description: "A worker that executes Twitter platform tasks",
+            twitterClient: client
         });
     }
 
-    // Add validation method for Twitter search
-    private async validateTwitterSearch(): Promise<void> {
-        try {
-            const testResult = await this.twitterPlugin.searchTweetsFunction.executable(
-                { query: "test" },
-                this.logger
-            );
-            
-            if (testResult.status === ExecutableGameFunctionStatus.Failed) {
-                throw new Error(`Search validation failed: ${testResult.feedback}`);
-            }
-            
-            this.logger('Twitter search functionality validated successfully');
-        } catch (error) {
-            throw new Error(`Failed to validate Twitter search: ${error}`);
-        }
+    // Update function signatures with proper types
+    private createResponse(
+        status: ExecutableGameFunctionStatus,
+        message: string
+    ): ExecutableGameFunctionResponse {
+        return new ExecutableGameFunctionResponse(status, message);
     }
 
-    private createResponse(status: ExecutableGameFunctionStatus, feedback: string): ExecutableGameFunctionResponse {
-        return new ExecutableGameFunctionResponse(status, feedback);
-    }
-
-    // Modify postTweetFunction
-    get postTweetFunction() { 
-        const fn = this.twitterPlugin.postTweetFunction;
-        fn.executable = async (args, logger) => {
-            try {
-                if (!await this.rateLimits.canPost()) {
-                    return this.createResponse(
-                        ExecutableGameFunctionStatus.Failed,
-                        `Rate limit reached: Can post again in ${this.rateLimits.getRemainingPosts()} minutes`
-                    );
-                }
-
-                this.logger(`Attempting to post tweet: ${JSON.stringify(args)}`);
-                const result = await this.twitterPlugin.postTweetFunction.executable(args, logger);
-                this.logger(`Tweet post result: ${JSON.stringify(result)}`);
-                return result;
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                return this.createResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    `Failed to post tweet: ${errorMessage}`
-                );
-            }
-        };
-        return fn;
-    }
-
+    // Update executable signatures with proper types
     get searchTweetsFunction() {
-        const fn = this.twitterPlugin.searchTweetsFunction;
-        fn.executable = async (args, logger) => {
-            try {
-                this.logger(`Searching tweets with: ${JSON.stringify(args)}`);
-                
-                if (!args.query) {
-                    return this.createResponse(
-                        ExecutableGameFunctionStatus.Failed,
-                        "Search query is required"
-                    );
-                }
-
-                // Use the plugin's search function directly
-                const result = await this.twitterPlugin.searchTweetsFunction.executable(args, logger);
-                
-                if (result.status === ExecutableGameFunctionStatus.Failed) {
-                    this.logger(`Search failed: ${result.feedback}`);
-                    return result;
-                }
-
+        return new GameFunction({
+            name: "search_tweets",
+            description: "Search for tweets matching a query",
+            args: [
+                { name: "query", description: "The search query" }
+            ] as const,
+            executable: async (args: { query?: string }, logger: (msg: string) => void) => {
                 try {
-                    const tweets = JSON.parse(result.feedback.split('Tweets found:\n')[1]);
+                    if (!args.query) throw new Error("Query is required");
+                    const tweets = await this.client.search(args.query);
                     return this.createResponse(
                         ExecutableGameFunctionStatus.Done,
                         JSON.stringify(tweets)
                     );
-                } catch (parseError) {
+                } catch (error) {
                     return this.createResponse(
                         ExecutableGameFunctionStatus.Failed,
-                        `Failed to parse tweet data: ${parseError}`
+                        `Failed to search tweets: ${error instanceof Error ? error.message : 'Unknown error'}`
                     );
                 }
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger(`Search error: ${errorMessage}`);
-                return this.createResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    `Failed to search tweets: ${errorMessage}`
-                );
             }
-        };
-        return fn;
+        });
     }
 
-    // Modify replyToTweetFunction
-    get replyToTweetFunction() { 
-        const fn = this.twitterPlugin.replyTweetFunction;
-        fn.executable = async (args, logger) => {
-            try {
-                if (!await this.rateLimits.canReply()) {
-                    return this.createResponse(
+    // Add missing function getters
+    get postTweetFunction() {
+        return new GameFunction({
+            name: "post_tweet",
+            description: "Post a new tweet",
+            args: [
+                { name: "tweet", description: "The tweet content" },
+                { name: "mediaId", description: "Optional media ID to attach" }
+            ] as const,
+            executable: async (args: { tweet?: string; mediaId?: string }, logger: (msg: string) => void) => {
+                try {
+                    if (!args.tweet) throw new Error("Tweet content is required");
+                    // Create the tweet data object
+                    const tweetData = {
+                        text: args.tweet,
+                        ...(args.mediaId && { media: { media_ids: [args.mediaId] } })
+                    };
+                    await this.client.post(JSON.stringify(tweetData));
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "Tweet posted successfully"
+                    );
+                } catch (error) {
+                    return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Failed,
-                        `Rate limit reached: Can reply again in ${this.rateLimits.getRemainingReplies()} minutes`
+                        "Failed to post tweet"
                     );
                 }
+            }
+        });
+    }
 
-                this.logger(`Attempting to reply to tweet: ${JSON.stringify(args)}`);
-                
-                // First try to find the specific tweet
-                const searchResult = await this.twitterPlugin.searchTweetsFunction.executable(
-                    { query: `id:${args.tweet_id}` },
-                    logger
-                );
-                
-                if (searchResult.status === ExecutableGameFunctionStatus.Failed) {
-                    // If the specific tweet is not found, try to find a recent relevant tweet
-                    const newSearchResult = await this.twitterPlugin.searchTweetsFunction.executable(
-                        { query: "blockchain protocols OR agentic networks -is:retweet" },
-                        logger
+    get replyToTweetFunction() {
+        return new GameFunction({
+            name: "reply_to_tweet",
+            description: "Reply to an existing tweet",
+            args: [
+                { name: "tweetId", description: "The ID of the tweet to reply to" },
+                { name: "reply", description: "The reply content" }
+            ] as const,
+            executable: async (args: { tweetId?: string; reply?: string }, logger: (msg: string) => void) => {
+                try {
+                    if (!args.tweetId || !args.reply) throw new Error("Tweet ID and reply content are required");
+                    await this.client.reply(args.tweetId, args.reply);
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "Reply sent successfully"
                     );
-
-                    if (newSearchResult.status === ExecutableGameFunctionStatus.Done) {
-                        try {
-                            // Extract just the JSON part after "Tweets found:\n"
-                            const jsonStr = newSearchResult.feedback.split('Tweets found:\n')[1];
-                            const tweets = jsonStr ? JSON.parse(jsonStr) : null;
-                            
-                            if (tweets && tweets.length > 0) {
-                                // Update the tweet_id to the most recent relevant tweet
-                                args.tweet_id = tweets[0].tweetId;
-                                this.logger(`Updating to reply to tweet: ${args.tweet_id}`);
-                            } else {
-                                return this.createResponse(
-                                    ExecutableGameFunctionStatus.Failed,
-                                    'No suitable tweets found to reply to'
-                                );
-                            }
-                        } catch (parseError) {
-                            this.logger(`Failed to parse tweet data: ${parseError}`);
-                            return this.createResponse(
-                                ExecutableGameFunctionStatus.Failed,
-                                `Failed to parse tweet data: ${parseError}`
-                            );
-                        }
-                    } else {
-                        return this.createResponse(
-                            ExecutableGameFunctionStatus.Failed,
-                            'Failed to find alternative tweet'
-                        );
-                    }
-                }
-
-                // Add validation for reply content
-                if (!args.reply || typeof args.reply !== 'string') {
-                    return this.createResponse(
+                } catch (error) {
+                    return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Failed,
-                        'Reply content is required and must be a string'
+                        "Failed to send reply"
                     );
                 }
-
-                // Attempt the reply
-                const result = await this.twitterPlugin.replyTweetFunction.executable(args, logger);
-                this.logger(`Reply result: ${JSON.stringify(result)}`);
-                
-                return this.createResponse(
-                    result.status,
-                    result.status === ExecutableGameFunctionStatus.Done 
-                        ? `Successfully replied to tweet ${args.tweet_id}`
-                        : `Failed to reply to tweet: ${result.feedback}`
-                );
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                this.logger(`Reply error: ${errorMessage}`);
-                return this.createResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    `Failed to reply to tweet: ${errorMessage}`
-                );
             }
-        };
-        return fn;
+        });
     }
 
-    get likeTweetFunction() { 
-        const fn = this.twitterPlugin.likeTweetFunction;
-        fn.executable = async (args, logger) => {
-            try {
-                this.logger(`Attempting to like tweet: ${JSON.stringify(args)}`);
-                const result = await this.twitterPlugin.likeTweetFunction.executable(args, logger);
-                this.logger(`Like result: ${JSON.stringify(result)}`);
-                return this.createResponse(
-                    result.status,
-                    `Successfully liked tweet ${args.tweet_id}`
-                );
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                return this.createResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    `Failed to like tweet: ${errorMessage}`
-                );
+    get likeTweetFunction() {
+        return new GameFunction({
+            name: "like_tweet",
+            description: "Like a tweet",
+            args: [
+                { name: "tweetId", description: "The ID of the tweet to like" }
+            ] as const,
+            executable: async (args: { tweetId?: string }, logger: (msg: string) => void) => {
+                try {
+                    if (!args.tweetId) throw new Error("Tweet ID is required");
+                    await this.client.like(args.tweetId);
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "Tweet liked successfully"
+                    );
+                } catch (error) {
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        "Failed to like tweet"
+                    );
+                }
             }
-        };
-        return fn;
+        });
     }
 
-    get quoteTweetFunction() { 
-        const fn = this.twitterPlugin.quoteTweetFunction;
-        fn.executable = async (args, logger) => {
-            try {
-                this.logger(`Attempting to quote tweet: ${JSON.stringify(args)}`);
-                const result = await this.twitterPlugin.quoteTweetFunction.executable(args, logger);
-                this.logger(`Quote result: ${JSON.stringify(result)}`);
-                return this.createResponse(
-                    result.status,
-                    `Successfully quoted tweet ${args.tweet_id}`
-                );
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                return this.createResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    `Failed to quote tweet: ${errorMessage}`
-                );
+    get getDmEventsFunction() {
+        return new GameFunction({
+            name: "get_dm_events",
+            description: "Retrieve recent DM events",
+            args: [] as const,
+            executable: async (_args: {}, logger: (msg: string) => void) => {
+                try {
+                    const events = await (this.client as any).getDmEvents();
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        JSON.stringify(events)
+                    );
+                } catch (e) {
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        "Failed to retrieve DM events"
+                    );
+                }
             }
-        };
-        return fn;
+        });
     }
+
+    get sendDmReplyFunction() {
+        return new GameFunction({
+            name: "send_dm_reply",
+            description: "Send a reply in a DM conversation",
+            args: [
+                { name: "conversation_id", description: "The conversation ID" },
+                { name: "message", description: "The message to send" }
+            ] as const,
+            executable: async (args: { conversation_id?: string; message?: string }, logger: (msg: string) => void) => {
+                try {
+                    if (!args.conversation_id || !args.message) throw new Error("Conversation ID and message are required");
+                    await (this.client as any).sendDmReply(args.conversation_id, args.message);
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "DM reply sent successfully"
+                    );
+                } catch (e) {
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        "Failed to send DM reply"
+                    );
+                }
+            }
+        });
+    }
+}
+
+export function createDmManagerWorker(twitterFunctions: TwitterFunctionManager) {
+    // ... implementation ...
 }

@@ -1,18 +1,27 @@
 import { initializeWorkers } from './worker';
-import { TwitterFunctionManager } from './functions';
+import { TwitterFunctionManager, createDmManagerWorker } from './functions';
 import { TwitterClient } from "@virtuals-protocol/game-twitter-plugin";
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { createAgent } from './agent';
 
+// Load environment variables before anything else
+const envPath = path.resolve('/Users/tripp/WenProd/AiWendy/game-starter/.env');
+console.log('Loading environment from:', envPath);
+dotenv.config({ path: envPath });
+
+// Verify environment variables immediately
+console.log('Process Environment:', {
+    NODE_ENV: process.env.NODE_ENV,
+    TWITTER_API_KEY: process.env.TWITTER_API_KEY ? '✓' : '✗',
+    TWITTER_API_SECRET: process.env.TWITTER_API_SECRET ? '✓' : '✗',
+    TWITTER_ACCESS_TOKEN: process.env.TWITTER_ACCESS_TOKEN ? '✓' : '✗',
+    TWITTER_ACCESS_TOKEN_SECRET: process.env.TWITTER_ACCESS_TOKEN_SECRET ? '✓' : '✗',
+    GAME_API_KEY: process.env.GAME_API_KEY ? '✓' : '✗'
+});
+
 async function startup() {
     try {
-        // Load environment variables with explicit path
-        const envPath = path.resolve(process.cwd(), '.env');
-        dotenv.config({ path: envPath });
-        
-        console.log('Loading environment from:', envPath);
-        
         // Validate Twitter credentials
         const requiredEnvVars = [
             'TWITTER_API_KEY',
@@ -38,8 +47,8 @@ async function startup() {
         // Test Twitter client connection
         try {
             console.log('Testing Twitter client connection...');
-            // Add a simple test API call here if available in your TwitterClient
-            console.log('Twitter client initialized successfully');
+            const me = await twitterClient.me();
+            console.log('Twitter client initialized successfully. Authenticated as:', me.data.username);
         } catch (error) {
             console.error('Failed to verify Twitter client:', error);
             throw error;
@@ -51,7 +60,14 @@ async function startup() {
         
         // Create and initialize the agent
         console.log('Creating agent...');
-        const agent = createAgent(twitterFunctions);
+        const dmWorker = createDmManagerWorker(twitterFunctions);
+
+        const agent = createAgent({
+            workers: [
+                dmWorker,
+                // ... other workers
+            ]
+        });
 
         // Enhanced logging for agent initialization
         agent.setLogger((agent, message) => {
@@ -102,8 +118,7 @@ async function startup() {
         }
         
     } catch (error) {
-        console.error('Error during startup:', error);
-        console.error('Stack trace:', error instanceof Error ? error.stack : '');
+        console.error('Startup failed:', error);
         process.exit(1);
     }
 }
