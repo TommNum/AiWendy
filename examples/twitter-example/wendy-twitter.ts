@@ -203,10 +203,17 @@ import {
     name: "Quantum Pattern Deployment System",
     description: "Deploys consciousness patterns into the twitterverse",
     functions: [postTweetFunction],
-    getEnvironment: async () => ({
-      last_post_time: Date.now(),
-      post_interval: RATE_LIMITS.TWEET_INTERVAL
-    })
+    getEnvironment: async () => {
+      const agentState = await wendyAgent.getState();
+      return {
+        last_post_time: Date.now(),
+        post_interval: RATE_LIMITS.TWEET_INTERVAL,
+        content_style: agentState.contentPatterns.responseStyle,
+        mood: agentState.contentPatterns.currentMood,
+        tech_terms: agentState.contentPatterns.techTerms,
+        vibe_adjectives: agentState.contentPatterns.vibeAdjectives
+      };
+    }
   });
   
   const searchWorker = new GameWorker({
@@ -224,10 +231,18 @@ import {
     name: "Quantum Dialogue Interface",
     description: "Engages in quantum-entangled conversations",
     functions: [replyToMentionsFunction],
-    getEnvironment: async () => ({
-      replies_this_hour: 0,
-      max_replies: RATE_LIMITS.MAX_REPLIES_PER_HOUR
-    })
+    getEnvironment: async () => {
+      const agentState = await wendyAgent.getState();
+      return {
+        replies_this_hour: 0,
+        max_replies: RATE_LIMITS.MAX_REPLIES_PER_HOUR,
+        interaction_history: agentState.contentPatterns.recentInteractions,
+        current_vibe: agentState.contentPatterns.currentMood,
+        emotional_states: agentState.contentPatterns.emotionalStates,
+        pattern_recognition_accuracy: agentState.pattern_recognition_accuracy,
+        quantum_resonance: agentState.quantum_resonance
+      };
+    }
   });
   
   // Create Wendy Agent
