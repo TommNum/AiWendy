@@ -150,18 +150,32 @@ import {
     ] as const,
     executable: async (args, logger) => {
       try {
-        const reply = args.reply.toLowerCase();
+        // Apply Wendy's style rules
+        let reply = args.reply.toLowerCase();
+        
+        // Ensure reply is not too long
+        if (reply.split(' ').length > 9) {
+          reply = reply.split(' ').slice(0, 9).join(' ');
+        }
+        
+        // Add hibiscus emoji 10% of the time
         const includeHibiscus = Math.random() < 0.1;
         const finalReply = includeHibiscus ? `${reply} ❀` : reply;
-  
-        await twitterClient.v2.reply(finalReply, args.tweet_id);
-        logger(`Quantum entangling with tweet ${args.tweet_id}: ${finalReply}`);
+
+        // Post reply
+        const result = await twitterClient.v2.reply(
+          finalReply,
+          args.tweet_id
+        );
+
+        logger(`Quantum entanglement complete: ${finalReply}`);
         
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Done,
-          "Quantum reply deployed"
+          `Reply deployed with ID: ${result.data.id}`
         );
       } catch (e) {
+        logger(`Reply quantum collapse: ${e.message}`);
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Failed,
           "Reply quantum collapse detected"
