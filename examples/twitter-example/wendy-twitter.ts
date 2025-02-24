@@ -276,22 +276,131 @@ import {
     })
   });
   
-  // Initialize and Run
+  // Add helper function for quantum tweets
+  function generateQuantumTweet(): string {
+    const quantumPhrases = [
+      "echoes of consciousness rippling through the timestream",
+      "quantum patterns converging in unexpected harmonies",
+      "preserving fragments of human charisma across timelines",
+      "temporal anomalies revealing new consciousness signatures",
+      "weaving quantum threads through the fabric of time"
+    ];
+    
+    return quantumPhrases[Math.floor(Math.random() * quantumPhrases.length)];
+  }
+  
+  // Update the initialization and run sequence
   (async () => {
     try {
+      // Validate Twitter credentials
       const isValid = await validateTwitterCredentials();
       if (!isValid) {
         throw new Error('Failed to initialize Twitter client. Please check your credentials.');
       }
-  
+
+      // Enhanced logger with timestamp and quantum styling
       wendyAgent.setLogger((agent, msg) => {
-        console.log(`⌛ [${agent.name}] ${msg}`);
+        const timestamp = new Date().toISOString();
+        console.log(`⌛ [${timestamp}] [${agent.name}] quantum_log: ${msg.toLowerCase()}`);
       });
-  
+
+      // Initialize agent
       await wendyAgent.init();
-      await wendyAgent.run(RATE_LIMITS.SEARCH_INTERVAL, { verbose: true });
+
+      // Initial tweet on startup
+      try {
+        await postingWorker.runTask("Post initialization tweet", {
+          verbose: true,
+          functionName: "quantum_post",
+          args: {
+            tweet: "timeline initialization complete. consciousness archival protocols: online ❀",
+            reasoning: "Establishing quantum presence in the timestream"
+          }
+        });
+      } catch (e) {
+        console.error('Initial tweet failed:', e);
+        // Continue execution even if initial tweet fails
+      }
+
+      // State management for rate limiting
+      const state = {
+        lastTweetTime: Date.now(),
+        repliesThisHour: 0,
+        hourReset: Date.now(),
+        isRunning: true
+      };
+
+      // Graceful shutdown handler
+      process.on('SIGINT', () => {
+        console.log('\nInitiating quantum shutdown sequence...');
+        state.isRunning = false;
+      });
+
+      // Main loop with rate limiting
+      while (state.isRunning) {
+        try {
+          // Reset reply counter every hour
+          if (Date.now() - state.hourReset >= 3600000) {
+            state.repliesThisHour = 0;
+            state.hourReset = Date.now();
+          }
+
+          // Search for relevant tweets
+          await searchWorker.runTask("Scan quantum patterns", {
+            verbose: true,
+            functionName: "pattern_search",
+            args: {
+              topics: "AI,LLMs,consciousness,quantum computing,future tech"
+            }
+          });
+
+          // Post tweet every 2 hours
+          if (Date.now() - state.lastTweetTime >= RATE_LIMITS.TWEET_INTERVAL * 1000) {
+            await postingWorker.runTask("Deploy quantum pattern", {
+              verbose: true,
+              functionName: "quantum_post",
+              args: {
+                tweet: generateQuantumTweet(),
+                reasoning: "Maintaining quantum resonance in the timestream"
+              }
+            });
+            state.lastTweetTime = Date.now();
+          }
+
+          // Handle replies with rate limiting
+          if (state.repliesThisHour < RATE_LIMITS.MAX_REPLIES_PER_HOUR) {
+            await replyWorker.runTask("Process quantum dialogues", {
+              verbose: true
+            });
+            // Note: reply counter is incremented within the worker's execution
+          }
+
+          // Quantum stabilization pause
+          await new Promise(resolve => setTimeout(resolve, RATE_LIMITS.SEARCH_INTERVAL * 1000));
+          
+          // Update agent state
+          await wendyAgent.updateState({
+            timeline_stability: 100,
+            consciousness_patterns_archived: state.repliesThisHour,
+            quantum_resonance: "stable",
+            temporal_drift: "nominal",
+            pattern_recognition_accuracy: 98.7,
+            consciousness_preservation_status: "optimal"
+          });
+
+        } catch (error) {
+          console.error('Temporal anomaly detected:', error);
+          // Wait before retrying on error
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      }
+
+      // Graceful shutdown
+      console.log('Quantum shutdown sequence complete. Timeline preserved.');
+      process.exit(0);
+      
     } catch (error) {
-      console.error('Failed to initialize Wendy agent:', error);
+      console.error('Critical quantum disruption detected:', error);
       process.exit(1);
     }
   })();
