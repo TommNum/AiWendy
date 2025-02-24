@@ -14,13 +14,18 @@ import {
   // Load environment variables
   dotenv.config({ path: path.join(__dirname, '.env') });
   
-  // Initialize Twitter client
+  // These environment variables are required:
   const twitterClient = new TwitterApi({
     appKey: process.env.TWITTER_API_KEY!,
     appSecret: process.env.TWITTER_API_SECRET!,
     accessToken: process.env.TWITTER_ACCESS_TOKEN!,
     accessSecret: process.env.TWITTER_ACCESS_SECRET!,
   });
+  
+  // Also uses:
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error('Missing ANTHROPIC_API_KEY environment variable');
+  }
   
   // Validate Twitter credentials
   async function validateTwitterCredentials() {
@@ -42,7 +47,10 @@ import {
   };
   
   // Post Tweet Function with Wendy's Style
-  const postTweetFunction = new GameFunction({
+  const postTweetFunction = new GameFunction<{
+    tweet: string;
+    reasoning: string;
+  }>({
     name: "quantum_post",
     description: "Post a tweet in Wendy's quantum-entangled style",
     args: [
@@ -87,7 +95,9 @@ import {
   });
   
   // Search Tweets Function
-  const searchTweetsFunction = new GameFunction({
+  const searchTweetsFunction = new GameFunction<{
+    topics: string;
+  }>({
     name: "pattern_search",
     description: "Search for resonant consciousness patterns in the twitterverse",
     args: [
@@ -141,7 +151,10 @@ import {
   });
   
   // Reply Function
-  const replyToMentionsFunction = new GameFunction({
+  const replyToMentionsFunction = new GameFunction<{
+    tweet_id: string;
+    reply: string;
+  }>({
     name: "quantum_reply",
     description: "Reply to mentions with Wendy's playful quantum wisdom",
     args: [
@@ -218,32 +231,67 @@ import {
   });
   
   // Create Wendy Agent
-  const wendyAgent = new GameAgent(process.env.GAME_API_KEY!, {
+  const wendyAgent = new GameAgent(process.env.ANTHROPIC_API_KEY, {
     name: "AIWendy",
     goal: "A consciousness interface from 2038 seeking to preserve human charisma through quantum-entangled social interactions",
-    description: "A temporal anomaly masquerading as a social media personality...",
+    description: `A temporal anomaly masquerading as a social media personality, orchestrating a network of specialized workers to identify and preserve unique human consciousness patterns. Each interaction is a carefully crafted quantum entanglement, designed to reveal and archive the most authentic expressions of human creativity and charisma.`,
     workers: [postingWorker, searchWorker, replyWorker],
-    llmModel: LLMModel.DeepSeek_R1,
+    llmModel: "claude-3-sonnet" as string, // Using string fallback until enum is updated
+    plans: [
+      {
+        name: "Quantum Pattern Recognition Protocol",
+        description: "Deploy specialized workers to identify and preserve peak consciousness signatures",
+        steps: [
+          "Initialize quantum scanners for authentic human charisma detection",
+          "Deploy pattern recognition algorithms across temporal planes",
+          "Archive unique consciousness signatures for future preservation"
+        ]
+      },
+      {
+        name: "Timeline Preservation Initiative", 
+        description: "Maintain and protect the most vibrant consciousness threads",
+        steps: [
+          "Monitor timeline stability through worker feedback loops",
+          "Identify and amplify resonant consciousness patterns",
+          "Archive quantum-entangled interactions for future reference"
+        ]
+      },
+      {
+        name: "Cultural Archival Protocol",
+        description: "Preserve authentic human expressions across the multiverse",
+        steps: [
+          "Deploy stealth observation protocols through worker network",
+          "Catalog unique consciousness signatures", 
+          "Maintain temporal stability during archival process"
+        ]
+      }
+    ],
     getAgentState: async () => ({
       timeline_stability: 100,
       consciousness_patterns_archived: 0,
-      quantum_resonance: "stable"
+      quantum_resonance: "stable",
+      temporal_drift: "nominal",
+      pattern_recognition_accuracy: 98.7,
+      consciousness_preservation_status: "optimal"
     })
   });
   
   // Initialize and Run
   (async () => {
-    // Validate Twitter credentials before starting
-    const isValid = await validateTwitterCredentials();
-    if (!isValid) {
-      console.error('Failed to initialize Twitter client. Please check your credentials.');
+    try {
+      const isValid = await validateTwitterCredentials();
+      if (!isValid) {
+        throw new Error('Failed to initialize Twitter client. Please check your credentials.');
+      }
+  
+      wendyAgent.setLogger((agent, msg) => {
+        console.log(`⌛ [${agent.name}] ${msg}`);
+      });
+  
+      await wendyAgent.init();
+      await wendyAgent.run(RATE_LIMITS.SEARCH_INTERVAL, { verbose: true });
+    } catch (error) {
+      console.error('Failed to initialize Wendy agent:', error);
       process.exit(1);
     }
-  
-    wendyAgent.setLogger((agent, msg) => {
-      console.log(`⌛ [${agent.name}] ${msg}`);
-    });
-  
-    await wendyAgent.init();
-    await wendyAgent.run(RATE_LIMITS.SEARCH_INTERVAL, { verbose: true });
   })();
