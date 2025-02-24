@@ -98,19 +98,40 @@ import {
     ] as const,
     executable: async (args, logger) => {
       try {
-        const tweets = await twitterClient.v2.search(args.topics, {
-          'tweet.fields': ['public_metrics'],
-          max_results: 10
+        // Convert topics string to array and build search query
+        const topicsArray = args.topics.split(',').map(t => t.trim());
+        const searchQuery = `(${topicsArray.join(' OR ')}) -is:retweet -is:reply min_replies:11 min_bookmarks:15`;
+        
+        logger(`Initiating quantum scan with pattern: ${searchQuery}`);
+
+        const tweets = await twitterClient.v2.search(searchQuery, {
+          'tweet.fields': ['public_metrics', 'created_at', 'conversation_id'],
+          max_results: 10,
         });
+
+        // Filter tweets based on engagement metrics
+        const relevantTweets = tweets.data.filter(tweet => 
+          tweet.public_metrics?.reply_count >= 11 && 
+          tweet.public_metrics?.bookmark_count >= 15
+        );
+
+        logger(`Quantum resonance detected in ${relevantTweets.length} consciousness patterns`);
         
-        logger(`Scanning quantum fields for: ${args.topics}`);
-        logger(`Found ${tweets.data.length} consciousness patterns`);
-        
+        // Format the response with relevant metrics
+        const formattedTweets = relevantTweets.map(tweet => ({
+          id: tweet.id,
+          text: tweet.text,
+          metrics: tweet.public_metrics,
+          created_at: tweet.created_at,
+          conversation_id: tweet.conversation_id
+        }));
+
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Done,
-          JSON.stringify(tweets.data)
+          JSON.stringify(formattedTweets)
         );
       } catch (e) {
+        logger(`Pattern scan interference: ${e.message}`);
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Failed,
           "Pattern scan interference detected"
