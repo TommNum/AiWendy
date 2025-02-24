@@ -44,6 +44,9 @@ export enum LLMModel {
   DeepSeek_R1 = "DeepSeek-R1",
   DeepSeek_V3 = "DeepSeek-V3",
   Qwen_2_5_72B_Instruct = "Qwen-2.5-72B-Instruct",
+  Claude_3_Sonnet = "claude-3-sonnet",
+  Claude_3_Opus = "claude-3-opus",
+  Claude_3_Haiku = "claude-3-haiku"
 }
 
 export interface IGameClient {
