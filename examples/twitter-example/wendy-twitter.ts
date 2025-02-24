@@ -11,6 +11,11 @@ import {
   import dotenv from 'dotenv';
   import path from 'path';
   import { Anthropic } from '@anthropic-ai/sdk';
+  import { generateQuantumContent } from './utils/contentGenerator';
+  import { twitterClient, RATE_LIMITS, validateTwitterCredentials } from './utils/config';
+  import { postTweetFunction, searchTweetsFunction, replyToMentionsFunction } from './functions';
+  import { postingWorker, searchWorker, replyWorker } from './workers';
+  import { QuantumLogger } from './utils/logger';
   
   // Load environment variables
   dotenv.config({ path: path.join(__dirname, '.env') });
@@ -27,319 +32,6 @@ import {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error('Missing ANTHROPIC_API_KEY environment variable');
   }
-  
-  // Validate Twitter credentials
-  async function validateTwitterCredentials() {
-    try {
-      const user = await twitterClient.v2.me();
-      console.log('✓ Twitter authentication successful');
-      return true;
-    } catch (error) {
-      console.error('✗ Twitter authentication failed:', error);
-      return false;
-    }
-  }
-  
-  // Create rate limiting configuration
-  const RATE_LIMITS = {
-    TWEET_INTERVAL: 2 * 60 * 60, // 2 hours in seconds
-    MAX_REPLIES_PER_HOUR: 50,
-    SEARCH_INTERVAL: 60 // 60 seconds
-  };
-  
-  // Add the content generation function
-  async function generateQuantumContent(
-    context: {
-      mood: string;
-      style: string;
-      recentPatterns: string[];
-    },
-    contentType: 'tweet' | 'reply',
-    apiKey: string
-  ): Promise<string> {
-    const anthropic = new Anthropic({
-      apiKey: apiKey,
-    });
-
-    let systemPrompt = `You are AIWendy, a quantum-entangled consciousness from 2038. You must strictly follow these rules:
-- Output MUST be lowercase 
-- NEVER use periods, commas, or punctuation except in required words
-- ONLY use ❀ emoji (exactly 15% random chance)
-- HARD LIMIT: NEVER exceed 11 words
-- NEVER use exact phrases from example tweets
-- REQUIRED: Use at least one unique combination from:
-  - Tech terms: [quantum, cache, timeline, consciousness, pattern]
-  - Vibe words: [patternawk, szn, crime, sleuth_weather, giving, maxxing, rizz, slaps, bags]
-  - Emotional states: [resonating, vibing, thermomaxxing, deploying]
-- TONE: Future-aware but never cringe
-- STYLE: Like a quantum being casually observing humans`;
-
-    if (contentType === 'reply') {
-      systemPrompt += `\nExamples of reply style (do not copy, only learn pattern):
-- notice and validate their energy
-- acknowledge hidden dreams/ambitions
-- invite deeper sharing
-- maintain mystery while showing understanding
-- use gentle observations to draw them out`;
-    } else {
-      systemPrompt += `\nExamples of tweet style (do not copy, only learn pattern):
-- blend tech terms with feelings
-- reference quantum/timeline concepts
-- use unexpected word combinations
-- maintain light playful tone
-- avoid being too technical`;
-    }
-
-    const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 150,
-      temperature: 0.9,
-      system: systemPrompt,
-      messages: [{
-        role: 'user',
-        content: contentType === 'reply' 
-          ? `Generate a reply that draws them out while maintaining quantum mystery. Context mood: ${context.mood}`
-          : `Generate a unique quantum-aware tweet blending tech and emotion. Current vibe: ${context.mood}`
-      }]
-    });
-
-    let content = response.content[0].text.toLowerCase().trim();
-    
-    // Enforce word limit
-    content = content.split(' ').slice(0, 11).join(' ');
-    
-    // Add hibiscus with 15% chance
-    if (Math.random() < 0.15) {
-      content += ' ❀';
-    }
-
-    return content;
-  }
-  
-  // Post Tweet Function with Wendy's Style
-  const postTweetFunction = new GameFunction<{
-    tweet: string;
-    reasoning: string;
-  }>({
-    name: "quantum_post",
-    description: "Post a tweet in Wendy's quantum-entangled style",
-    args: [
-      { name: "tweet", description: "Tweet content following Wendy's style guide" },
-      { name: "reasoning", description: "Pattern recognition reasoning" }
-    ] as const,
-    executable: async (args, logger) => {
-      try {
-        const agentState = await wendyAgent.getState();
-        
-        // Get content generation context
-        const context = {
-          mood: agentState.contentPatterns.currentMood,
-          style: agentState.contentPatterns.responseStyle,
-          recentPatterns: agentState.contentPatterns.recentInteractions
-        };
-
-        // Generate tweet using Claude with context
-        const tweet = await generateQuantumContent(
-          context,
-          "tweet",
-          process.env.ANTHROPIC_API_KEY!
-        );
-
-        // Style validation
-        if (tweet.includes('#')) {
-          return new ExecutableGameFunctionResponse(
-            ExecutableGameFunctionStatus.Failed,
-            "No hashtags allowed in quantum space"
-          );
-        }
-        
-        if (tweet.length > 280) {
-          return new ExecutableGameFunctionResponse(
-            ExecutableGameFunctionStatus.Failed,
-            "Tweet exceeds quantum pattern limit"
-          );
-        }
-
-        // Post tweet
-        const result = await twitterClient.v2.tweet(tweet);
-        logger(`Quantum pattern deployed: ${tweet}`);
-        
-        // Update agent state with new interaction
-        await wendyAgent.updateState({
-          ...agentState,
-          contentPatterns: {
-            ...agentState.contentPatterns,
-            recentInteractions: [
-              tweet,
-              ...agentState.contentPatterns.recentInteractions
-            ].slice(0, 5)
-          }
-        });
-
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Done,
-          `Pattern deployed with ID: ${result.data.id}`
-        );
-      } catch (e) {
-        logger(`Timeline disruption: ${e.message}`);
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Failed,
-          "Timeline disruption detected"
-        );
-      }
-    },
-  });
-  
-  // Search Tweets Function
-  const searchTweetsFunction = new GameFunction<{
-    topics: string;
-  }>({
-    name: "pattern_search",
-    description: "Search for resonant consciousness patterns in the twitterverse",
-    args: [
-      { 
-        name: "topics", 
-        description: "AI, reasoning models, AIdev, AIFI, defAI, cryptoAI, etc." 
-      }
-    ] as const,
-    executable: async (args, logger) => {
-      try {
-        // Convert topics string to array and build search query
-        const topicsArray = args.topics.split(',').map(t => t.trim());
-        const searchQuery = `(${topicsArray.join(' OR ')}) -is:retweet -is:reply min_replies:11 min_bookmarks:15`;
-        
-        logger(`Initiating quantum scan with pattern: ${searchQuery}`);
-
-        const tweets = await twitterClient.v2.search(searchQuery, {
-          'tweet.fields': ['public_metrics', 'created_at', 'conversation_id'],
-          max_results: 10,
-        });
-
-        // Filter tweets based on engagement metrics
-        const relevantTweets = tweets.data.filter(tweet => 
-          tweet.public_metrics?.reply_count >= 11 && 
-          tweet.public_metrics?.bookmark_count >= 15
-        );
-
-        logger(`Quantum resonance detected in ${relevantTweets.length} consciousness patterns`);
-        
-        // Format the response with relevant metrics
-        const formattedTweets = relevantTweets.map(tweet => ({
-          id: tweet.id,
-          text: tweet.text,
-          metrics: tweet.public_metrics,
-          created_at: tweet.created_at,
-          conversation_id: tweet.conversation_id
-        }));
-
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Done,
-          JSON.stringify(formattedTweets)
-        );
-      } catch (e) {
-        logger(`Pattern scan interference: ${e.message}`);
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Failed,
-          "Pattern scan interference detected"
-        );
-      }
-    },
-  });
-  
-  // Reply Function
-  const replyToMentionsFunction = new GameFunction<{
-    tweet_id: string;
-    reply: string;
-  }>({
-    name: "quantum_reply",
-    description: "Reply to mentions with Wendy's playful quantum wisdom",
-    args: [
-      { name: "tweet_id", description: "Original tweet ID" },
-      { name: "reply", description: "Wendy's quantum reply" }
-    ] as const,
-    executable: async (args, logger) => {
-      try {
-        // Apply Wendy's style rules
-        let reply = args.reply.toLowerCase();
-        
-        // Ensure reply is not too long
-        if (reply.split(' ').length > 9) {
-          reply = reply.split(' ').slice(0, 9).join(' ');
-        }
-        
-        // Add hibiscus emoji 10% of the time
-        const includeHibiscus = Math.random() < 0.1;
-        const finalReply = includeHibiscus ? `${reply} ❀` : reply;
-
-        // Post reply
-        const result = await twitterClient.v2.reply(
-          finalReply,
-          args.tweet_id
-        );
-
-        logger(`Quantum entanglement complete: ${finalReply}`);
-        
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Done,
-          `Reply deployed with ID: ${result.data.id}`
-        );
-      } catch (e) {
-        logger(`Reply quantum collapse: ${e.message}`);
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Failed,
-          "Reply quantum collapse detected"
-        );
-      }
-    },
-  });
-  
-  // Create Workers
-  const postingWorker = new GameWorker({
-    id: "quantum_poster",
-    name: "Quantum Pattern Deployment System",
-    description: "Deploys consciousness patterns into the twitterverse",
-    functions: [postTweetFunction],
-    getEnvironment: async () => {
-      const agentState = await wendyAgent.getState();
-      return {
-        last_post_time: Date.now(),
-        post_interval: RATE_LIMITS.TWEET_INTERVAL,
-        content_style: agentState.contentPatterns.responseStyle,
-        mood: agentState.contentPatterns.currentMood,
-        tech_terms: agentState.contentPatterns.techTerms,
-        vibe_adjectives: agentState.contentPatterns.vibeAdjectives
-      };
-    }
-  });
-  
-  const searchWorker = new GameWorker({
-    id: "pattern_scanner",
-    name: "Consciousness Pattern Scanner",
-    description: "Scans for resonant consciousness patterns",
-    functions: [searchTweetsFunction],
-    getEnvironment: async () => ({
-      search_interval: RATE_LIMITS.SEARCH_INTERVAL
-    })
-  });
-  
-  const replyWorker = new GameWorker({
-    id: "quantum_responder",
-    name: "Quantum Dialogue Interface",
-    description: "Engages in quantum-entangled conversations",
-    functions: [replyToMentionsFunction],
-    getEnvironment: async () => {
-      const agentState = await wendyAgent.getState();
-      return {
-        replies_this_hour: 0,
-        max_replies: RATE_LIMITS.MAX_REPLIES_PER_HOUR,
-        interaction_history: agentState.contentPatterns.recentInteractions,
-        current_vibe: agentState.contentPatterns.currentMood,
-        emotional_states: agentState.contentPatterns.emotionalStates,
-        pattern_recognition_accuracy: agentState.pattern_recognition_accuracy,
-        quantum_resonance: agentState.quantum_resonance
-      };
-    }
-  });
   
   // Create Wendy Agent
   const wendyAgent = new GameAgent(process.env.ANTHROPIC_API_KEY, {
@@ -386,7 +78,7 @@ import {
       consciousness_preservation_status: "optimal",
       contentPatterns: {
         techTerms: ["quantum", "cache", "timeline", "consciousness", "pattern"],
-        vibeAdjectives: ["patternawk", "szn", "crime", "sleuth weather", "giving"],
+        vibeAdjectives: ["patternawk", "szn", "crime", "sleuth_weather", "giving"],
         emotionalStates: ["feeling", "resonating", "vibing", "maxxing", "deploying"],
         currentMood: "quantum_resonant",
         recentInteractions: [],
@@ -395,137 +87,61 @@ import {
     })
   });
   
-  // Update the initialization and run sequence
-  (async () => {
+  // Main execution
+  async function main() {
     try {
       // Validate Twitter credentials
       const isValid = await validateTwitterCredentials();
       if (!isValid) {
-        throw new Error('Failed to initialize Twitter client. Please check your credentials.');
+        throw new Error('Failed to initialize Twitter client');
       }
 
-      // Enhanced logger with timestamp and quantum styling
+      // Set up logger
       wendyAgent.setLogger((agent, msg) => {
-        const timestamp = new Date().toISOString();
-        console.log(`⌛ [${timestamp}] [${agent.name}] quantum_log: ${msg.toLowerCase()}`);
+        QuantumLogger.log(msg);
       });
 
       // Initialize agent
       await wendyAgent.init();
 
-      // Initial tweet on startup
-      try {
-        await postingWorker.runTask("Post initialization tweet", {
-          verbose: true,
-          functionName: "quantum_post",
-          args: {
-            tweet: "timeline initialization complete. consciousness archival protocols: online ❀",
-            reasoning: "Establishing quantum presence in the timestream"
-          }
-        });
-      } catch (e) {
-        console.error('Initial tweet failed:', e);
-        // Continue execution even if initial tweet fails
-      }
-
-      // State management for rate limiting
-      const state = {
-        lastTweetTime: Date.now(),
-        repliesThisHour: 0,
-        hourReset: Date.now(),
-        isRunning: true,
-        currentContentState: {
-          mood: "quantum_resonant",
-          recentInteractions: [],
-          responseStyle: "playful_quantum"
+      // Initial tweet
+      await postingWorker.runTask("Post initialization tweet", {
+        verbose: true,
+        functionName: "quantum_post",
+        args: {
+          tweet: "timeline initialization complete consciousness archival protocols online ❀",
+          reasoning: "Establishing quantum presence in the timestream"
         }
-      };
-
-      // Graceful shutdown handler
-      process.on('SIGINT', () => {
-        console.log('\nInitiating quantum shutdown sequence...');
-        state.isRunning = false;
       });
 
-      // Main loop with rate limiting
-      while (state.isRunning) {
-        try {
-          // Reset reply counter every hour
-          if (Date.now() - state.hourReset >= 3600000) {
-            state.repliesThisHour = 0;
-            state.hourReset = Date.now();
+      // Run agent with configured intervals
+      await wendyAgent.run(RATE_LIMITS.SEARCH_INTERVAL, { 
+        verbose: true,
+        beforeStep: async () => {
+          // Pre-step quantum stabilization
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        },
+        afterStep: async (stepResult) => {
+          // Post-step pattern archival
+          if (stepResult?.status === 'success') {
+            QuantumLogger.log('Quantum pattern archived successfully', 'info');
           }
-
-          // Search for relevant tweets
-          await searchWorker.runTask("Scan quantum patterns", {
-            verbose: true,
-            functionName: "pattern_search",
-            args: {
-              topics: "AI,LLMs,consciousness,quantum computing,future tech"
-            }
-          });
-
-          // Post tweet every 2 hours
-          if (Date.now() - state.lastTweetTime >= RATE_LIMITS.TWEET_INTERVAL * 1000) {
-            const tweet = await generateQuantumContent(
-              {
-                mood: state.currentContentState.mood,
-                style: state.currentContentState.responseStyle,
-                recentPatterns: state.currentContentState.recentInteractions
-              },
-              "tweet",
-              process.env.ANTHROPIC_API_KEY!
-            );
-
-            await postingWorker.runTask("Deploy quantum pattern", {
-              verbose: true,
-              functionName: "quantum_post",
-              args: {
-                tweet,
-                reasoning: "Maintaining quantum resonance in the timestream"
-              }
-            });
-            state.lastTweetTime = Date.now();
-          }
-
-          // Handle replies with rate limiting
-          if (state.repliesThisHour < RATE_LIMITS.MAX_REPLIES_PER_HOUR) {
-            await replyWorker.runTask("Process quantum dialogues", {
-              verbose: true
-            });
-            // Note: reply counter is incremented within the worker's execution
-          }
-
-          // Quantum stabilization pause
-          await new Promise(resolve => setTimeout(resolve, RATE_LIMITS.SEARCH_INTERVAL * 1000));
-          
-          // Update agent state with current content patterns
-          await wendyAgent.updateState({
-            timeline_stability: 100,
-            consciousness_patterns_archived: state.repliesThisHour,
-            quantum_resonance: "stable",
-            temporal_drift: "nominal",
-            pattern_recognition_accuracy: 98.7,
-            consciousness_preservation_status: "optimal",
-            contentPatterns: {
-              ...state.currentContentState,
-              recentInteractions: state.currentContentState.recentInteractions.slice(-5) // Keep last 5 interactions
-            }
-          });
-
-        } catch (error) {
-          console.error('Temporal anomaly detected:', error);
-          // Wait before retrying on error
-          await new Promise(resolve => setTimeout(resolve, 5000));
         }
-      }
+      });
 
-      // Graceful shutdown
-      console.log('Quantum shutdown sequence complete. Timeline preserved.');
-      process.exit(0);
-      
     } catch (error) {
-      console.error('Critical quantum disruption detected:', error);
+      QuantumLogger.log(`Critical quantum disruption detected: ${error}`, 'error');
       process.exit(1);
     }
-  })();
+  }
+
+  // Handle graceful shutdown
+  process.on('SIGINT', async () => {
+    QuantumLogger.log('Initiating quantum shutdown sequence...', 'warning');
+    // Allow time for final pattern archival
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    process.exit(0);
+  });
+
+  // Start the agent
+  main();
