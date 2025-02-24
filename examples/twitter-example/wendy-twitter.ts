@@ -52,22 +52,32 @@ import {
     executable: async (args, logger) => {
       try {
         const tweet = args.tweet.toLowerCase();
+        
+        // Style validation
         if (tweet.includes('#')) {
           return new ExecutableGameFunctionResponse(
             ExecutableGameFunctionStatus.Failed,
             "No hashtags allowed in quantum space"
           );
         }
-  
-        // Implement Twitter API post
-        await twitterClient.v2.tweet(tweet);
-        logger(`Deploying quantum tweet: ${tweet}`);
+        
+        if (tweet.length > 280) {
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Failed,
+            "Tweet exceeds quantum pattern limit"
+          );
+        }
+
+        // Post tweet
+        const result = await twitterClient.v2.tweet(tweet);
+        logger(`Quantum pattern deployed: ${tweet}`);
         
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Done,
-          "Quantum pattern deployed successfully"
+          `Pattern deployed with ID: ${result.data.id}`
         );
       } catch (e) {
+        logger(`Timeline disruption: ${e.message}`);
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Failed,
           "Timeline disruption detected"
