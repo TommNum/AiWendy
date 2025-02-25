@@ -27,6 +27,9 @@ RUN echo "Node version: $(node -v)" && \
 # Build TypeScript
 RUN npm run build
 
+# Verify build output
+RUN ls -la dist/
+
 # Expose port for health checks
 EXPOSE 3000
 

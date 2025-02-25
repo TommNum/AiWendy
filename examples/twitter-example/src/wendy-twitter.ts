@@ -16,10 +16,10 @@ import { postTweetFunction, searchTweetsFunction, replyToMentionsFunction } from
 import { postingWorker, searchWorker, replyWorker } from '../workers';
 import { QuantumLogger } from '../utils/logger';
 import { setupHealthCheck } from './healthcheck';
-import winston from 'winston';
+const winston = require('winston');
 import express, { Request, Response } from 'express';
 
-// Load environment variables from project root
+// Update env path to point to project root
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // Add this check at the start of your application
@@ -37,13 +37,15 @@ const client = new TwitterApi({
   accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
 });
 
-// Verify the client
-try {
-  await client.v2.me();
-  console.log('Twitter authentication successful');
-} catch (error) {
-  console.error('Twitter authentication failed:', error);
-  process.exit(1);
+// Move verification into an async init function
+async function initializeTwitter() {
+  try {
+    await client.v2.me();
+    console.log('Twitter authentication successful');
+  } catch (error) {
+    console.error('Twitter authentication failed:', error);
+    process.exit(1);
+  }
 }
 
 // Also uses:
@@ -111,6 +113,7 @@ app.listen(PORT, () => {
 // Main function
 async function main() {
   try {
+    await initializeTwitter(); // Call initialization here
     await validateTwitterCredentials();
     await agent.init();
 

@@ -1,13 +1,11 @@
 import { TwitterApi } from 'twitter-api-v2';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import path from 'path';
 import dotenv from 'dotenv';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __filename = path.resolve(__dirname);
 
 // Load environment variables
-dotenv.config({ path: join(__dirname, '../../.env') });
+dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 export const RATE_LIMITS = {
   TWEET_INTERVAL: 2 * 60 * 60,
