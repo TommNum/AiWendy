@@ -1,27 +1,24 @@
 {
   "compilerOptions": {
-    "target": "es2022",
-    "module": "es2022",
-    "lib": ["es2022"],
-    "moduleResolution": "node",
-    "outDir": "dist",
+    "target": "ES2022",
+    "module": "ES2022",
+    "outDir": "./dist",
+    "rootDir": "./",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "types": ["node", "express", "winston"],
     "allowJs": true,
-    "baseUrl": ".",
-    "rootDir": ".",
-    "paths": {
-      "*": ["node_modules/*"]
-    },
-    "typeRoots": ["./node_modules/@types"]
+    "resolveJsonModule": true
   },
-  "ts-node": {
-    "esm": true,
-    "experimentalSpecifiers": true
-  },
-  "include": ["src/**/*", "utils/**/*", "functions/**/*", "workers/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*",
+    "utils/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 } 
