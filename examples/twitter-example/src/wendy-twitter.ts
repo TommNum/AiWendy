@@ -114,7 +114,28 @@ import {
   const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
   let lastActivityTime = Date.now();
 
-  // Update main function with enhanced error handling
+  // Move express setup to top of file, after imports
+  const app = express();
+  const PORT = process.env.PORT || 3000;
+
+  // Enhanced health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      agent: 'AIWendy',
+      state: 'quantum_resonant',
+      lastActivity: new Date(lastActivityTime).toISOString()
+    });
+  });
+
+  // Start express server before main agent logic
+  app.listen(PORT, () => {
+    logger.info(`Quantum health monitoring active on port ${PORT}`);
+  });
+
+  // Update main function to properly integrate with express
   async function main() {
     try {
       const { updateActivityTimestamp } = setupHealthCheck();
@@ -206,11 +227,8 @@ import {
     }
   }
 
-  const app = express();
-
-  // Health check endpoint
-  app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'healthy' });
+  // Call main() after express is set up
+  main().catch(error => {
+    logger.error('Fatal quantum collapse:', error);
+    process.exit(1);
   });
-
-  main();

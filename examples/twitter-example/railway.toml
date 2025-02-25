@@ -1,6 +1,7 @@
 [build]
 builder = "NIXPACKS"
 buildCommand = "npm install && npm run build"
+watchPatterns = ["**/*.ts", "package.json"]
 
 [deploy]
 startCommand = "npm start"
@@ -9,7 +10,7 @@ healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 sleepMode = "enabled"
-sleepSchedule = "0 6-10 * * *"  # Sleep during low-activity hours (6 AM - 10 AM UTC)
+sleepSchedule = "0 6-10 * * *"
 
 [deploy.env]
 NODE_ENV = "production"
