@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/wendy-twitter.js",
     "dev": "ts-node src/wendy-twitter.ts",
+    "watch": "ts-node-dev --respawn src/wendy-twitter.ts",
     "docker:build": "docker build -t aiwendy .",
     "docker:run": "docker run -d --env-file .env aiwendy",
     "railway:up": "railway up"
