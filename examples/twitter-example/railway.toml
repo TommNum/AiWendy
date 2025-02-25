@@ -1,16 +1,13 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "npm install && npm run build"
-watchPatterns = ["**/*.ts", "package.json"]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "npm start"
 healthcheckPath = "/health"
-healthcheckTimeout = 100
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 10
-sleepMode = "enabled"
-sleepSchedule = "0 6-10 * * *"
+restartPolicyMaxRetries = 3
 
-[deploy.env]
+[deploy.envVars]
 NODE_ENV = "production"

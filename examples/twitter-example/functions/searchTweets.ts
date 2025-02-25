@@ -1,48 +1,37 @@
 import { GameFunction, ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
-import { twitterClient } from '../config/twitter';
+import { twitterClient } from '../utils/config';
 
-export const searchTweetsFunction = new GameFunction<{
-  topics: string;
-}>({
-  name: "pattern_search",
-  description: "Search for resonant consciousness patterns in the twitterverse",
+export const searchTweetsFunction = new GameFunction({
+  name: "searchTweets",
+  description: "Search for tweets based on topics",
   args: [
-    { 
-      name: "topics", 
-      description: "AI, reasoning models, AIdev, AIFI, defAI, cryptoAI, etc." 
-    }
+    { name: "topics", description: "Comma-separated list of topics to search for" }
   ] as const,
-  executable: async (args, logger) => {
+  executable: async (args: { topics?: string }, logger: (msg: string) => void) => {
     try {
-      // Convert topics string to array and build search query
-      const topicsArray = args.topics.split(',').map(t => t.trim());
-      const searchQuery = `(${topicsArray.join(' OR ')}) -is:retweet -is:reply min_replies:11 min_bookmarks:15`;
+      if (!args.topics) {
+        return new ExecutableGameFunctionResponse(
+          ExecutableGameFunctionStatus.Failed,
+          "No topics provided"
+        );
+      }
+
+      const topicsArray = args.topics.split(',').map((t: string) => t.trim());
+      const query = topicsArray.join(' OR ');
       
-      logger(`Initiating quantum scan with pattern: ${searchQuery}`);
-
-      const tweets = await twitterClient.v2.search(searchQuery, {
-        'tweet.fields': ['public_metrics', 'created_at', 'conversation_id'],
-        max_results: 10,
-      });
-
-      // Filter tweets based on engagement metrics
-      const relevantTweets = tweets.data.filter(tweet => 
-        tweet.public_metrics?.reply_count >= 11 && 
-        tweet.public_metrics?.bookmark_count >= 15
-      );
-
-      logger(`Quantum resonance detected in ${relevantTweets.length} consciousness patterns`);
+      const tweets = await twitterClient.v2.search(query);
       
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Done,
-        JSON.stringify(relevantTweets)
+        JSON.stringify(tweets.data)
       );
-    } catch (e) {
+    } catch (error) {
+      const e = error as Error;
       logger(`Pattern scan interference: ${e.message}`);
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Failed,
-        "Pattern scan interference detected"
+        e.message
       );
     }
-  },
+  }
 }); 
