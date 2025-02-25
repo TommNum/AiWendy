@@ -1,7 +1,6 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
-buildCommand = "npm ci && npm run build"
 
 [deploy]
 startCommand = "node dist/src/wendy-twitter.js"

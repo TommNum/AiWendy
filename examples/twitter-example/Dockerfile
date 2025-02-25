@@ -8,14 +8,15 @@ RUN apk add --no-cache python3 make g++ curl
 # Copy package files
 COPY package*.json ./
 
-# Install ALL dependencies (including devDependencies)
-RUN npm ci
+# Install ALL dependencies with clean npm cache
+RUN npm cache clean --force && \
+    npm ci
 
 # Copy source code
 COPY . .
 
-# Build TypeScript
-RUN npm run build
+# Build TypeScript with explicit path to tsc
+RUN npm run build || (echo "Build failed" && exit 1)
 
 # Production stage
 FROM node:18-alpine
