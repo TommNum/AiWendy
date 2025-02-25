@@ -1,11 +1,7 @@
+import * as path from 'path';
 import { TwitterApi } from 'twitter-api-v2';
-import path from 'path';
-import dotenv from 'dotenv';
 
-const __filename = path.resolve(__dirname);
-
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+const currentDir = path.resolve(__dirname);
 
 export const RATE_LIMITS = {
   TWEET_INTERVAL: 2 * 60 * 60,
@@ -17,7 +13,7 @@ export const twitterClient = new TwitterApi({
   appKey: process.env.TWITTER_API_KEY!,
   appSecret: process.env.TWITTER_API_SECRET!,
   accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-  accessSecret: process.env.TWITTER_ACCESS_SECRET!,
+  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
 });
 
 export async function validateTwitterCredentials() {

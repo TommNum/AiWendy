@@ -1,33 +1,17 @@
 {
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "outDir": "./dist",
-    "rootDir": "./",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowJs": true,
-    "resolveJsonModule": true,
+    "outDir": "./dist/src",
+    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
-      "*": ["*", "src/*"]
-    },
-    "typeRoots": ["./node_modules/@types"]
+      "*": ["*"]
+    }
   },
-  "include": [
-    "src/**/*",
-    "utils/**/*",
-    "functions/**/*",
-    "workers/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/*.test.ts",
-    "**/__tests__/*",
-    "jest.config.ts"
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "./functions" },
+    { "path": "./utils" },
+    { "path": "./workers" }
   ]
 } 

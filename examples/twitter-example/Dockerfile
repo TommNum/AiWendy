@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
-COPY tsconfig.json ./
+COPY tsconfig*.json ./
 
 # Install dependencies
 RUN npm install --no-optional
@@ -24,18 +24,22 @@ RUN echo "Node version: $(node -v)" && \
     echo "NPM version: $(npm -v)" && \
     echo "TypeScript version: $(tsc -v)"
 
-# Build TypeScript
-RUN npm run build
+# Clean and build with more detailed output
+RUN npm run clean || true
+RUN npm run build || (echo "Build failed" && find dist -type f 2>/dev/null && exit 1)
 
-# Verify build output
-RUN ls -la dist/
+# Debug output
+RUN echo "Project structure:" && \
+    find . -type f -name "*.js" -o -name "*.d.ts" | sort && \
+    echo "\nDist contents:" && \
+    find dist -type f | sort
 
 # Expose port for health checks
 EXPOSE 3000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:3000/status || exit 1
 
 # Start the agent
 CMD ["npm", "start"] 

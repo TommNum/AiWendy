@@ -2,11 +2,15 @@
   "name": "twitter-example",
   "version": "1.0.0",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/wendy-twitter.js",
+    "build": "tsc -b --verbose",
+    "start": "node dist/src/wendy-twitter.js",
+    "clean": "rm -rf dist",
+    "prebuild": "npm run clean",
     "dev": "ts-node src/wendy-twitter.ts",
     "docker:build": "docker build -t wendy-twitter .",
-    "docker:run": "docker run -p 3000:3000 --env-file .env wendy-twitter"
+    "docker:run": "cd /Users/tripp/WendyAI2242025/AiWendy/examples/twitter-example && docker run -p 3000:3000 --env-file .env wendy-twitter",
+    "predeploy": "npm run build",
+    "deploy": "railway up"
   },
   "dependencies": {
     "@virtuals-protocol/game": "^0.1.9",

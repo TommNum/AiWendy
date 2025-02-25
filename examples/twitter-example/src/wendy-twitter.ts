@@ -19,22 +19,40 @@ import { setupHealthCheck } from './healthcheck';
 const winston = require('winston');
 import express, { Request, Response } from 'express';
 
-// Update env path to point to project root
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+// Add debug logging for env loading
+console.log('Current directory:', process.cwd());
+const envPath = path.join(process.cwd(), '.env');
+console.log('Loading .env from:', envPath);
 
-// Add this check at the start of your application
-if (!process.env.TWITTER_API_KEY || !process.env.TWITTER_API_SECRET || 
-    !process.env.TWITTER_ACCESS_TOKEN || !process.env.TWITTER_ACCESS_TOKEN_SECRET) {
-  console.error('Missing required Twitter API credentials');
+// Update env loading to be more verbose
+dotenv.config({ 
+  path: envPath,
+  debug: process.env.NODE_ENV !== 'production'
+});
+
+// Add env var check
+const requiredEnvVars = [
+  'TWITTER_API_KEY',
+  'TWITTER_API_SECRET',
+  'TWITTER_ACCESS_TOKEN',
+  'TWITTER_ACCESS_TOKEN_SECRET',
+  'ANTHROPIC_API_KEY'
+];
+
+console.log('Checking environment variables...');
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  console.error('Missing required environment variables:', missingVars);
   process.exit(1);
 }
+console.log('All required environment variables are present');
 
 // Initialize Twitter client
 const client = new TwitterApi({
-  appKey: process.env.TWITTER_API_KEY,
-  appSecret: process.env.TWITTER_API_SECRET,
-  accessToken: process.env.TWITTER_ACCESS_TOKEN,
-  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+  appKey: process.env.TWITTER_API_KEY!,
+  appSecret: process.env.TWITTER_API_SECRET!,
+  accessToken: process.env.TWITTER_ACCESS_TOKEN!,
+  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET!,
 });
 
 // Move verification into an async init function
@@ -102,20 +120,44 @@ app.get('/status', (req: Request, res: Response) => {
   });
 });
 
+// Add health endpoint to match Dockerfile
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'active',
+    lastActivity: lastActivityTime,
+    uptime: process.uptime()
+  });
+});
+
 // Setup health check
 const trackActivity = setupHealthCheck(app);
 
-// Start express server before main agent logic
-app.listen(PORT, () => {
-  logger.info(`Quantum health monitoring active on port ${PORT}`);
-});
+// Add startup timeout
+const STARTUP_TIMEOUT = 30000; // 30 seconds
 
 // Main function
 async function main() {
+  const startupTimeout = setTimeout(() => {
+    console.error('Application startup timed out');
+    process.exit(1);
+  }, STARTUP_TIMEOUT);
+
   try {
-    await initializeTwitter(); // Call initialization here
-    await validateTwitterCredentials();
+    if (!(await validateTwitterCredentials())) {
+      process.exit(1);
+    }
+    
+    // Start express server first
+    await new Promise<void>((resolve) => {
+      app.listen(PORT, () => {
+        logger.info(`Quantum health monitoring active on port ${PORT}`);
+        console.log(`Server started on port ${PORT}`);
+        resolve();
+      });
+    });
+
     await agent.init();
+    clearTimeout(startupTimeout); // Clear timeout after successful startup
 
     // Enhanced error handling
     process.on('uncaughtException', (error) => {
