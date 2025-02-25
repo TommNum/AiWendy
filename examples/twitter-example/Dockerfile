@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm install --no-optional
 
-# Install TypeScript globally to ensure tsc is available
-RUN npm install -g typescript@5.0.4
+# Install TypeScript and type definitions globally
+RUN npm install -g typescript@5.0.4 @types/express @types/node
 
 # Copy all source code and config files
 COPY . .
@@ -28,7 +28,9 @@ RUN echo "Node version: $(node -v)" && \
     echo "Project structure:" && \
     find . -type f -not -path "./node_modules/*" && \
     echo "Starting TypeScript compilation..." && \
-    npm run build
+    npm run build && \
+    echo "Compiled files:" && \
+    find dist -type f
 
 # Expose port for health checks
 EXPOSE 3000
@@ -38,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
 # Start the bot
-CMD ["npm", "start"] 
+CMD ["node", "--experimental-specifier-resolution=node", "--es-module-specifier-resolution=node", "dist/src/wendy-twitter.js"] 

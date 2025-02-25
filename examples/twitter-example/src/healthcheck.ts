@@ -1,4 +1,4 @@
-import express from 'express';
+import { Request, Response, Express } from 'express';
 
 let lastActivityTimestamp = Date.now();
 
@@ -6,8 +6,8 @@ function updateActivityTimestamp() {
   lastActivityTimestamp = Date.now();
 }
 
-export function setupHealthCheck(app: express.Application) {
-  app.get('/health', (req, res) => {
+export function setupHealthCheck(app: Express) {
+  app.get('/health', (req: Request, res: Response) => {
     const timeSinceLastActivity = Date.now() - lastActivityTimestamp;
     const isHealthy = timeSinceLastActivity < 5 * 60 * 1000; // 5 minutes
 

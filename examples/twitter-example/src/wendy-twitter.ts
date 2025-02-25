@@ -17,7 +17,7 @@ import { postingWorker, searchWorker, replyWorker } from '../workers';
 import { QuantumLogger } from '../utils/logger';
 import { setupHealthCheck } from './healthcheck';
 import winston from 'winston';
-import express from 'express';
+import express, { Request, Response } from 'express';
 
 // Load environment variables from project root
 dotenv.config({ path: path.join(__dirname, '../../.env') });
@@ -92,14 +92,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Enhanced health check endpoint
-app.get('/health', (req, res) => {
+app.get('/status', (req: Request, res: Response) => {
   res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    agent: 'AIWendy',
-    state: 'quantum_resonant',
-    lastActivity: new Date(lastActivityTime).toISOString()
+    status: 'active',
+    lastActivity: lastActivityTime,
+    uptime: process.uptime()
   });
 });
 
