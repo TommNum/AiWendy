@@ -8,8 +8,9 @@
     "start": "node dist/src/wendy-twitter.js",
     "dev": "ts-node src/wendy-twitter.ts",
     "watch": "ts-node-dev --respawn src/wendy-twitter.ts",
-    "docker:build": "docker build -t aiwendy .",
-    "docker:run": "docker run -d --env-file .env aiwendy",
+    "docker:build": "docker build -t wendy-twitter .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env wendy-twitter",
+    "docker:logs": "docker logs -f wendy-twitter",
     "railway:up": "railway up"
   },
   "dependencies": {
