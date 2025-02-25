@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
 # Start the bot
-CMD ["node", "--experimental-specifier-resolution=node", "--es-module-specifier-resolution=node", "dist/src/wendy-twitter.js"] 
+CMD ["node", "--experimental-specifier-resolution=node", "--es-module-specifier-resolution=node", "--no-warnings", "dist/src/wendy-twitter.js"] 

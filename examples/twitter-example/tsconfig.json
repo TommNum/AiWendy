@@ -18,6 +18,10 @@
     },
     "typeRoots": ["./node_modules/@types"]
   },
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifiers": true
+  },
   "include": ["src/**/*", "utils/**/*", "functions/**/*", "workers/**/*"],
   "exclude": ["node_modules", "dist"]
 } 

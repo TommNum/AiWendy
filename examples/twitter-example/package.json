@@ -7,7 +7,7 @@
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
     "build": "tsc --project tsconfig.json",
-    "start": "node --experimental-specifier-resolution=node dist/src/wendy-twitter.js",
+    "start": "node --experimental-specifier-resolution=node --no-warnings dist/src/wendy-twitter.js",
     "dev": "ts-node --esm src/wendy-twitter.ts",
     "watch": "ts-node-dev --esm --respawn src/wendy-twitter.ts",
     "docker:build": "docker build -t wendy-twitter .",
