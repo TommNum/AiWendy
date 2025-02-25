@@ -1,22 +1,29 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+buildCommand = "npm ci && npm run build"
 
 [deploy]
-startCommand = "npm start"
-healthcheckPath = "/health"
+startCommand = "node dist/src/wendy-twitter.js"
+healthcheckPath = "/status"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 numReplicas = 1
+healthcheckInterval = 30
 
 [deploy.envVars]
 NODE_ENV = "production"
 PORT = "3000"
+LOG_LEVEL = "info"
+HOST = "0.0.0.0"
 
-# Add these to ensure they're set in Railway
+# Required environment variables
 TWITTER_API_KEY = "${TWITTER_API_KEY}"
 TWITTER_API_SECRET = "${TWITTER_API_SECRET}"
 TWITTER_ACCESS_TOKEN = "${TWITTER_ACCESS_TOKEN}"
 TWITTER_ACCESS_TOKEN_SECRET = "${TWITTER_ACCESS_TOKEN_SECRET}"
 ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[service]
+name = "aiwendy-twitter"

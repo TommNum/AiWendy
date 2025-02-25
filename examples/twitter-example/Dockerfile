@@ -1,45 +1,43 @@
-FROM node:18-slim
-
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Install build essentials and curl for healthcheck
+RUN apk add --no-cache python3 make g++ curl
+
 # Copy package files
 COPY package*.json ./
-COPY tsconfig*.json ./
 
-# Install dependencies
-RUN npm install --no-optional
-RUN npm install -g typescript@5.0.4 @types/express @types/node
+# Install ALL dependencies (including devDependencies)
+RUN npm ci
 
 # Copy source code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p logs
+# Build TypeScript
+RUN npm run build
 
-# Print versions for debugging
-RUN echo "Node version: $(node -v)" && \
-    echo "NPM version: $(npm -v)" && \
-    echo "TypeScript version: $(tsc -v)"
+# Production stage
+FROM node:18-alpine
 
-# Clean and build with more detailed output
-RUN npm run clean || true
-RUN npm run build || (echo "Build failed" && find dist -type f 2>/dev/null && exit 1)
+WORKDIR /app
 
-# Debug output
-RUN echo "Project structure:" && \
-    find . -type f -name "*.js" -o -name "*.d.ts" | sort && \
-    echo "\nDist contents:" && \
-    find dist -type f | sort
+# Install only production dependencies
+COPY package*.json ./
+RUN npm ci --only=production --no-cache
 
-# Expose port for health checks
+# Copy built files from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Create log directory and set permissions
+RUN mkdir -p logs && chmod 777 logs
+
+# Expose port
 EXPOSE 3000
 
-# Healthcheck
+# Health check using curl
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/status || exit 1
+    CMD curl -f http://localhost:3000/status || exit 1
 
-# Start the agent
-CMD ["npm", "start"] 
+# Start command
+CMD ["node", "dist/src/wendy-twitter.js"] 

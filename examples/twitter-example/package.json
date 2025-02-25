@@ -10,7 +10,12 @@
     "docker:build": "docker build -t wendy-twitter .",
     "docker:run": "cd /Users/tripp/WendyAI2242025/AiWendy/examples/twitter-example && docker run -p 3000:3000 --env-file .env wendy-twitter",
     "predeploy": "npm run build",
-    "deploy": "railway up"
+    "deploy": "railway up",
+    "railway:init": "railway init",
+    "railway:link": "railway link",
+    "railway:status": "railway status",
+    "railway:logs": "railway logs",
+    "railway:up": "railway up"
   },
   "dependencies": {
     "@virtuals-protocol/game": "^0.1.9",
