@@ -1,24 +1,21 @@
 {
   "compilerOptions": {
-    "target": "es2016",
-    "module": "commonjs",
-    "rootDir": "./",
-    "outDir": "./dist",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    "target": "es2022",
+    "module": "es2022",
+    "lib": ["es2022"],
+    "moduleResolution": "node",
+    "outDir": "dist",
     "strict": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node", "express"]
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*"]
+    }
   },
-  "include": [
-    "src/**/*",
-    "functions/**/*",
-    "utils/**/*",
-    "workers/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*", "utils/**/*", "functions/**/*", "workers/**/*"],
+  "exclude": ["node_modules", "dist"]
 } 

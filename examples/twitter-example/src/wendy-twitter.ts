@@ -19,16 +19,32 @@ import { setupHealthCheck } from './healthcheck';
 import winston from 'winston';
 import express from 'express';
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '.env') });
+// Load environment variables from project root
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
+// Add this check at the start of your application
+if (!process.env.TWITTER_API_KEY || !process.env.TWITTER_API_SECRET || 
+    !process.env.TWITTER_ACCESS_TOKEN || !process.env.TWITTER_ACCESS_TOKEN_SECRET) {
+  console.error('Missing required Twitter API credentials');
+  process.exit(1);
+}
 
 // Initialize Twitter client
-const twitterClient = new TwitterApi({
-  appKey: process.env.TWITTER_API_KEY!,
-  appSecret: process.env.TWITTER_API_SECRET!,
-  accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-  accessSecret: process.env.TWITTER_ACCESS_SECRET!,
+const client = new TwitterApi({
+  appKey: process.env.TWITTER_API_KEY,
+  appSecret: process.env.TWITTER_API_SECRET,
+  accessToken: process.env.TWITTER_ACCESS_TOKEN,
+  accessSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
 });
+
+// Verify the client
+try {
+  await client.v2.me();
+  console.log('Twitter authentication successful');
+} catch (error) {
+  console.error('Twitter authentication failed:', error);
+  process.exit(1);
+}
 
 // Also uses:
 if (!process.env.ANTHROPIC_API_KEY) {
