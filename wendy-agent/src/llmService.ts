@@ -33,9 +33,6 @@ export async function callLLM(prompt: string): Promise<string> {
     const client = getGameClient();
     await client.init(); // Make sure the client is initialized
     
-    // The Game framework doesn't have a direct text generation endpoint in the interface we saw
-    // We'll need to use the Task API to generate text
-    
     // Create a temporary agent for this task
     const agent = await client.createAgent(
       "WendyResponseAgent",
@@ -45,12 +42,6 @@ export async function callLLM(prompt: string): Promise<string> {
     
     // Set the task with our prompt
     const submissionId = await client.setTask(agent.id, prompt);
-    
-    // We don't have access to the task completion status directly
-    // For simplicity, we'll create a minimal worker to get the response
-    
-    // In a production environment, you might want to implement a more robust solution
-    // This is a simplified approach for demonstration
     
     // Wait a short time for the task to complete
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -64,18 +55,19 @@ export async function callLLM(prompt: string): Promise<string> {
       getEnvironment: async () => ({})
     };
     
+    // Using the new API call format
     const action = await client.getTaskAction(
       agent.id,
       submissionId,
-      dummyWorker as any,
-      null,
-      {}
+      dummyWorker,
+      null,  // No previous action result
+      {}     // Empty environment
     );
     
     // Extract the response from the action
-    // The exact path depends on how the Game framework structures the response
-    // This is a guess based on the interface
-    const response = action.action_args.thought || 
+    // Adjusted based on the GameAction interface structure
+    const response = action.thought || 
+                    (action.action_args?.response as string) || 
                     (action.agent_state?.response as string) || 
                     "temporal field interference - consciousness signature unclear";
     

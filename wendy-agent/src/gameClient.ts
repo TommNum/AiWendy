@@ -1,86 +1,147 @@
 import axios, { Axios } from "axios";
 import { LLMModel } from "@virtuals-protocol/game";
 
-// Simplified GameClient class for the wendy-agent project
+// Define the interfaces needed from the original GameClient.ts
+interface ExecutableGameFunctionResponseJSON {
+  status: string;
+  message: string;
+}
+
+interface GameAction {
+  action_name: string;
+  action_args: Record<string, any>;
+  agent_state?: Record<string, any>;
+  thought?: string;
+}
+
+interface GameAgent {
+  id: string;
+  name: string;
+  goal: string;
+  description: string;
+}
+
+interface Map {
+  id: string;
+  locations: any[];
+}
+
+// Implementation based on the original GameClientV2 class
 export default class GameClient {
-  public client: Axios | null = null;
-  private runnerUrl = "https://game.virtuals.io";
+  public client: Axios;
+  private baseUrl = "https://sdk.game.virtuals.io/v2";
 
-  constructor(private apiKey: string, private llmModel: LLMModel | string) {}
-
-  async init() {
-    const accessToken = await this.getAccessToken();
-
+  constructor(private apiKey: string, private llmModel: LLMModel | string) {
     this.client = axios.create({
-      baseURL: this.runnerUrl,
+      baseURL: this.baseUrl,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
+        "x-api-key": this.apiKey,
         model_name: this.llmModel,
       },
     });
   }
 
-  private async getAccessToken(): Promise<string> {
-    try {
-      const response = await axios.post(
-        `${this.runnerUrl}/auth/token`,
-        { api_key: this.apiKey }
-      );
-      return response.data.access_token;
-    } catch (error) {
-      console.error("Failed to get access token:", error);
-      throw new Error("Authentication failed");
-    }
+  async init() {
+    // No need for additional initialization as headers are set in constructor
+    return this;
   }
 
-  async createAgent(name: string, goal: string, description: string): Promise<{ id: string }> {
-    if (!this.client) await this.init();
-    
-    try {
-      const response = await this.client!.post("/agents", {
+  async createMap(workers: any[]): Promise<Map> {
+    const result = await this.client.post<{ data: Map }>("/maps", {
+      data: {
+        locations: workers.map((worker) => ({
+          id: worker.id,
+          name: worker.name,
+          description: worker.description,
+        })),
+      },
+    });
+
+    return result.data.data;
+  }
+
+  async createAgent(
+    name: string,
+    goal: string,
+    description: string
+  ): Promise<GameAgent> {
+    const result = await this.client.post<{ data: GameAgent }>("/agents", {
+      data: {
         name,
         goal,
-        description
-      });
-      return { id: response.data.id };
-    } catch (error) {
-      console.error("Failed to create agent:", error);
-      throw new Error("Failed to create agent");
-    }
+        description,
+      },
+    });
+
+    return result.data.data;
   }
 
-  async setTask(agentId: string, prompt: string): Promise<string> {
-    if (!this.client) await this.init();
-    
-    try {
-      const response = await this.client!.post(`/agents/${agentId}/tasks`, {
-        prompt
-      });
-      return response.data.submission_id;
-    } catch (error) {
-      console.error("Failed to set task:", error);
-      throw new Error("Failed to set task");
+  async getAction(
+    agentId: string,
+    mapId: string,
+    worker: any,
+    gameActionResult: ExecutableGameFunctionResponseJSON | null,
+    environment: Record<string, any>,
+    agentState: Record<string, any>
+  ): Promise<GameAction> {
+    const payload: { [key in string]: any } = {
+      location: worker.id,
+      map_id: mapId,
+      environment: environment,
+      functions: worker.functions.map((fn: any) => fn.toJSON ? fn.toJSON() : fn),
+      agent_state: agentState,
+      version: "v2",
+    };
+
+    if (gameActionResult) {
+      payload.current_action = gameActionResult;
     }
+
+    const result = await this.client.post<{ data: GameAction }>(
+      `/agents/${agentId}/actions`,
+      {
+        data: payload,
+      }
+    );
+
+    return result.data.data;
+  }
+  
+  async setTask(agentId: string, task: string): Promise<string> {
+    const result = await this.client.post<{ data: { submission_id: string } }>(
+      `/agents/${agentId}/tasks`,
+      {
+        data: { task },
+      }
+    );
+
+    return result.data.data.submission_id;
   }
 
   async getTaskAction(
     agentId: string,
     submissionId: string,
     worker: any,
-    logger: any,
-    environment: any
-  ): Promise<any> {
-    if (!this.client) await this.init();
-    
-    try {
-      const response = await this.client!.get(
-        `/agents/${agentId}/tasks/${submissionId}/action`
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Failed to get task action:", error);
-      throw new Error("Failed to get task action");
+    gameActionResult: ExecutableGameFunctionResponseJSON | null,
+    environment: Record<string, any>
+  ): Promise<GameAction> {
+    const payload: Record<string, any> = {
+      environment: environment,
+      functions: worker.functions ? worker.functions.map((fn: any) => fn.toJSON ? fn.toJSON() : fn) : [],
+    };
+
+    if (gameActionResult) {
+      payload.action_result = gameActionResult;
     }
+
+    const result = await this.client.post<{ data: GameAction }>(
+      `/agents/${agentId}/tasks/${submissionId}/next`,
+      {
+        data: payload,
+      }
+    );
+
+    return result.data.data;
   }
 } 
