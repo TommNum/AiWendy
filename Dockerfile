@@ -4,23 +4,23 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Install bash for improved scripting
-RUN apk add --no-cache bash
+RUN apk add --no-cache bash nc
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Copy AiWendy package files
-COPY AiWendy/package*.json ./
-COPY plugins/ ./plugins/
+# Copy package files from the Twitter example directory
+COPY AiWendy/examples/twitter-example/package*.json ./
+COPY AiWendy/examples/twitter-example/plugins/ ./plugins/
 
 # Install dependencies
 RUN npm install --production && \
     cd plugins/telegramPlugin && npm install --production && \
     cd ../twitterPlugin && npm install --production
 
-# Copy application code
-COPY AiWendy/ ./
+# Copy application code from the Twitter example directory
+COPY AiWendy/examples/twitter-example/ ./
 
 # Create logs directory
 RUN mkdir -p logs
