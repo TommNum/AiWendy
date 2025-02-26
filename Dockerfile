@@ -10,19 +10,17 @@ RUN apk add --no-cache bash
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Copy package files
-COPY package*.json ./
-COPY temp-plugins/ ./plugins/
+# Copy AiWendy package files
+COPY AiWendy/package*.json ./
+COPY plugins/ ./plugins/
 
 # Install dependencies
 RUN npm install --production && \
     cd plugins/telegramPlugin && npm install --production && \
-    cd ../whatsappPlugin && npm install --production && \
-    cd ../emailPlugin && npm install --production && \
     cd ../twitterPlugin && npm install --production
 
 # Copy application code
-COPY . .
+COPY AiWendy/ ./
 
 # Create logs directory
 RUN mkdir -p logs
@@ -43,7 +41,7 @@ log "Starting application..."\n\
 # Loop to restart the application if it crashes\n\
 while true; do\n\
   log "Starting node process..."\n\
-  node examples/twitter-example/dist/wendy-twitter.js 2>&1 | tee -a $LOG_DIR/app-output.log\n\
+  node dist/src/wendy-twitter.js 2>&1 | tee -a $LOG_DIR/app-output.log\n\
   EXIT_CODE=$?\n\
   \n\
   log "Application exited with code $EXIT_CODE"\n\
@@ -59,7 +57,7 @@ while true; do\n\
 done' > /app/start.sh && chmod +x /app/start.sh
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD node examples/twitter-example/dist/healthcheck.js
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD node dist/src/healthcheck.js
 
 # Run the wrapper script
 CMD ["/app/start.sh"] 
