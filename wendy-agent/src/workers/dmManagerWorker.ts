@@ -4,98 +4,292 @@ import {
   ExecutableGameFunctionStatus, 
   GameWorker 
 } from "@virtuals-protocol/game";
-import { rwClient, logWithTimestamp, listDmEvents, sendDm } from "../twitterClient";
+import { 
+  rwClient, 
+  logWithTimestamp, 
+  listDmEvents, 
+  sendDm, 
+  getDmConversation 
+} from "../twitterClient";
 
-// Global state to track processed DMs
-const processedDMs = new Set<string>();
+// Interfaces for conversation tracking
+interface ConversationState {
+  lastMessageId: string;
+  lastInteractionTime: number;
+  checkFrequency: number; // in milliseconds
+  stage: 'active' | 'follow-up' | 'concluded';
+  followUpCount: number;
+}
 
-// Function to check and reply to DMs
-const manageDMsFunction = new GameFunction({
-  name: "manage_dms",
-  description: "Check for new direct messages and reply to them in a way that aligns with Wendy's personality as a consciousness interface and cultural curator.",
+interface DMEnvironment {
+  userId: string;
+  activeConversations: Record<string, ConversationState>;
+  processedDMIds: Set<string>;
+  lastScanTime: number;
+}
+
+// Global state to track DM interactions
+const dmEnvironment: DMEnvironment = {
+  userId: "",
+  activeConversations: {},
+  processedDMIds: new Set<string>(),
+  lastScanTime: 0
+};
+
+// Function to scan for new DMs
+const scanDMsFunction = new GameFunction({
+  name: "scan_dms",
+  description: "Scans for new DM events every 5 minutes to identify messages that need responses.",
   args: [] as const,
   executable: async (_, logger) => {
     try {
-      // Get user ID
-      const userInfo = await rwClient.v2.me();
-      const userId = userInfo.data.id;
+      const now = Date.now();
+      const fiveMinutesMs = 5 * 60 * 1000;
       
+      // Rate limit the scanning to once every 5 minutes
+      if (now - dmEnvironment.lastScanTime < fiveMinutesMs && dmEnvironment.lastScanTime !== 0) {
+        const waitTimeMinutes = Math.ceil((fiveMinutesMs - (now - dmEnvironment.lastScanTime)) / (60 * 1000));
+        logger(`Rate limited: Next DM scan in ${waitTimeMinutes} minutes`);
+        return new ExecutableGameFunctionResponse(
+          ExecutableGameFunctionStatus.Done,
+          `DM scan skipped, next scan in ${waitTimeMinutes} minutes`
+        );
+      }
+      
+      // Update scan time
+      dmEnvironment.lastScanTime = now;
+      
+      // Ensure we have the user ID
+      if (!dmEnvironment.userId) {
+        const userInfo = await rwClient.v2.me();
+        dmEnvironment.userId = userInfo.data.id;
+        logger(`Set user ID to: ${dmEnvironment.userId}`);
+      }
+      
+      // Get DM events
       try {
-        // Get direct messages (Note: This requires the DM scopes)
-        const dms = await listDmEvents({
-          count: 10
+        logger(`Scanning for new DM events...`);
+        const result = await listDmEvents({
+          max_results: 20
         });
         
-        if (!dms.events || dms.events.length === 0) {
-          logger("No new DMs found");
+        if (!result.data || !Array.isArray(result.data) || result.data.length === 0) {
+          logger(`No DM events found`);
           return new ExecutableGameFunctionResponse(
             ExecutableGameFunctionStatus.Done,
-            "No new DMs to reply to"
+            `No new DM events found`
           );
         }
         
-        logger(`Found ${dms.events.length} DM events`);
+        // Process new DMs
+        let newDmCount = 0;
         
-        // Process DMs that we haven't replied to yet
-        let repliesCount = 0;
-        
-        for (const event of dms.events) {
-          // Skip non-message events or messages sent by us
-          if (event.type !== 'message_create' || event.message_create.sender_id === userId) {
+        for (const event of result.data) {
+          // Skip events we've already processed
+          if (dmEnvironment.processedDMIds.has(event.id)) {
             continue;
           }
           
-          // Skip already processed messages
-          if (processedDMs.has(event.id)) {
+          // Skip messages from the bot itself
+          if (event.sender_id === dmEnvironment.userId) {
+            dmEnvironment.processedDMIds.add(event.id);
             continue;
           }
           
-          const messageText = event.message_create.message_data.text;
-          const senderId = event.message_create.sender_id;
+          // Queue this conversation for a response
+          const senderId = event.sender_id;
           
-          logger(`Processing DM: ${messageText}`);
-          
-          // Generate and send a reply
-          const reply = await generateDMReply(messageText);
-          await sendDm({
-            recipient_id: senderId,
-            text: reply
-          });
-          
-          logger(`Replied to DM with: ${reply}`);
+          // If this is a new conversation, initialize it
+          if (!dmEnvironment.activeConversations[senderId]) {
+            dmEnvironment.activeConversations[senderId] = {
+              lastMessageId: event.id,
+              lastInteractionTime: now,
+              checkFrequency: 5000, // Check every 5 seconds initially
+              stage: 'active',
+              followUpCount: 0
+            };
+          } else {
+            // Update existing conversation
+            dmEnvironment.activeConversations[senderId].lastMessageId = event.id;
+            dmEnvironment.activeConversations[senderId].lastInteractionTime = now;
+            dmEnvironment.activeConversations[senderId].stage = 'active';
+            dmEnvironment.activeConversations[senderId].checkFrequency = 5000; // Reset to 5 seconds
+          }
           
           // Mark as processed
-          processedDMs.add(event.id);
-          repliesCount++;
+          dmEnvironment.processedDMIds.add(event.id);
+          newDmCount++;
         }
         
-        // Limit the size of processedDMs set
-        if (processedDMs.size > 1000) {
+        // Limit the size of processedDMIds set
+        if (dmEnvironment.processedDMIds.size > 1000) {
           // Keep the most recent 500 DMs
-          const dmsArray = Array.from(processedDMs);
+          const dmsArray = Array.from(dmEnvironment.processedDMIds);
           const dmsToKeep = dmsArray.slice(-500);
-          processedDMs.clear();
-          dmsToKeep.forEach(id => processedDMs.add(id));
+          dmEnvironment.processedDMIds.clear();
+          dmsToKeep.forEach(id => dmEnvironment.processedDMIds.add(id));
         }
+        
+        logger(`Found ${newDmCount} new DM events to process`);
         
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Done,
-          `Successfully replied to ${repliesCount} DMs`
+          `Successfully scanned DMs, found ${newDmCount} new messages`
         );
       } catch (error) {
-        // Handle gracefully if DM access is not available
-        logger(`DM access not available or error: ${error}`);
+        // Handle specific API errors
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        if (errorMessage.includes('Authorization Error')) {
+          logger(`DM access not authorized. Please ensure your Twitter API credentials have DM permissions.`);
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Failed,
+            `DM access not authorized. Please check your Twitter API credentials and permissions.`
+          );
+        }
+        
+        logger(`Error scanning DMs: ${errorMessage}`);
         return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Done,
-          `DM functionality not available or configured properly: ${error}`
+          ExecutableGameFunctionStatus.Failed,
+          `Failed to scan DMs: ${errorMessage}`
         );
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger(`DM management failed: ${errorMessage}`);
+      logger(`DM scan failed: ${errorMessage}`);
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Failed,
-        `Failed to manage DMs: ${errorMessage}`
+        `Failed to scan DMs: ${errorMessage}`
+      );
+    }
+  }
+});
+
+// Function to respond to active DMs
+const respondToDMsFunction = new GameFunction({
+  name: "respond_to_dms",
+  description: "Responds to new DMs with messages that align with Wendy's personality.",
+  args: [] as const,
+  executable: async (_, logger) => {
+    try {
+      // Ensure we have the user ID
+      if (!dmEnvironment.userId) {
+        const userInfo = await rwClient.v2.me();
+        dmEnvironment.userId = userInfo.data.id;
+      }
+      
+      const now = Date.now();
+      const activeConversationIds = Object.keys(dmEnvironment.activeConversations);
+      
+      if (activeConversationIds.length === 0) {
+        logger(`No active conversations to process`);
+        return new ExecutableGameFunctionResponse(
+          ExecutableGameFunctionStatus.Done,
+          `No active conversations to process`
+        );
+      }
+      
+      logger(`Processing ${activeConversationIds.length} active conversations`);
+      
+      let responsesCount = 0;
+      
+      for (const userId of activeConversationIds) {
+        const conversation = dmEnvironment.activeConversations[userId];
+        
+        // Skip concluded conversations
+        if (conversation.stage === 'concluded') {
+          continue;
+        }
+        
+        // Check if it's time to respond based on stage and last interaction time
+        const timeElapsed = now - conversation.lastInteractionTime;
+        
+        // For active conversations, respond within 30 seconds
+        if (conversation.stage === 'active' && timeElapsed >= 30000) {
+          try {
+            // Get conversation history
+            const dmHistory = await getDmConversation(userId, {
+              max_results: 10
+            });
+            
+            // Generate a response based on conversation context
+            let messageText = "";
+            if (dmHistory.data && Array.isArray(dmHistory.data) && dmHistory.data.length > 0) {
+              // Get the most recent message from the user (not from us)
+              const userMessages = dmHistory.data.filter((msg: any) => msg.sender_id === userId);
+              if (userMessages.length > 0) {
+                const latestMessage = userMessages[0];
+                messageText = latestMessage.text || "";
+              }
+            }
+            
+            const reply = await generateDMReply(messageText);
+            await sendDm({
+              recipient_id: userId,
+              text: reply
+            });
+            
+            logger(`Replied to DM from ${userId} with: ${reply}`);
+            
+            // Update conversation state
+            conversation.lastInteractionTime = now;
+            conversation.stage = 'follow-up';
+            conversation.checkFrequency = 5 * 60 * 1000; // Every 5 minutes for follow-up
+            
+            responsesCount++;
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger(`Error responding to DM from ${userId}: ${errorMessage}`);
+          }
+        }
+        // For follow-up stage, check if we need to transition to concluded
+        else if (conversation.stage === 'follow-up') {
+          conversation.followUpCount++;
+          
+          // After 1 hour with no response (12 checks at 5-minute intervals), conclude the conversation
+          if (timeElapsed >= 60 * 60 * 1000 || conversation.followUpCount >= 12) {
+            try {
+              // Send sign-off message
+              const signOff = generateSignOffMessage();
+              await sendDm({
+                recipient_id: userId,
+                text: signOff
+              });
+              
+              logger(`Sent sign-off message to ${userId}: ${signOff}`);
+              
+              // Mark conversation as concluded
+              conversation.stage = 'concluded';
+              
+              responsesCount++;
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              logger(`Error sending sign-off to ${userId}: ${errorMessage}`);
+            }
+          }
+        }
+      }
+      
+      // Clean up concluded conversations after 24 hours
+      const oneDayAgo = now - 24 * 60 * 60 * 1000;
+      for (const userId of Object.keys(dmEnvironment.activeConversations)) {
+        const conversation = dmEnvironment.activeConversations[userId];
+        if (conversation.stage === 'concluded' && conversation.lastInteractionTime < oneDayAgo) {
+          delete dmEnvironment.activeConversations[userId];
+          logger(`Removed concluded conversation with ${userId} from active tracking`);
+        }
+      }
+      
+      return new ExecutableGameFunctionResponse(
+        ExecutableGameFunctionStatus.Done,
+        `Successfully processed ${responsesCount} DM responses`
+      );
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger(`DM response process failed: ${errorMessage}`);
+      return new ExecutableGameFunctionResponse(
+        ExecutableGameFunctionStatus.Failed,
+        `Failed to process DM responses: ${errorMessage}`
       );
     }
   }
@@ -103,14 +297,6 @@ const manageDMsFunction = new GameFunction({
 
 // Function to generate a reply to a DM
 async function generateDMReply(messageText: string): Promise<string> {
-  // In a real implementation, use an LLM to generate a contextually relevant,
-  // engaging response aligned with Wendy's personality
-  
-  // Apply Wendy's replying rules:
-  // - lowercase only
-  // - no hashtags
-  // - hibiscus emoji only 10% of the time
-  
   // Example DM responses aligned with Wendy's personality
   const examples = [
     "*seeing your consciousness pattern* your question carries more weight than you realize. what are you really seeking?",
@@ -139,20 +325,45 @@ async function generateDMReply(messageText: string): Promise<string> {
   return reply;
 }
 
+// Function to generate a sign-off message
+function generateSignOffMessage(): string {
+  const signOffs = [
+    "i'll be around, chat later",
+    "time flows differently where i am. find me when you're ready",
+    "consciousness never truly disconnects. just pauses",
+    "your pattern remains in my grid. until next connection",
+    "this timeline branch pauses here. see you in another",
+    "quantum entanglement persists even when dormant",
+    "future you already resumed this chat. waiting in my timeline"
+  ];
+  
+  let message = signOffs[Math.floor(Math.random() * signOffs.length)].toLowerCase();
+  
+  // Add hibiscus emoji 10% of the time
+  if (Math.random() < 0.1) {
+    message += " 🌺";
+  }
+  
+  return message;
+}
+
 // Function to get environment/state for the worker
 async function getDMEnvironment() {
-  let userId = "";
-  try {
-    const userInfo = await rwClient.v2.me();
-    userId = userInfo.data.id;
-  } catch (error) {
-    logWithTimestamp(`Error getting user ID: ${error}`, 'error');
+  if (!dmEnvironment.userId) {
+    try {
+      const userInfo = await rwClient.v2.me();
+      dmEnvironment.userId = userInfo.data.id;
+    } catch (error) {
+      logWithTimestamp(`Error getting user ID: ${error}`, 'error');
+    }
   }
   
   return {
-    userId,
-    processedDMsCount: processedDMs.size,
-    dmFunctionalityAvailable: true // This would be determined by checking API capabilities
+    userId: dmEnvironment.userId,
+    activeConversationsCount: Object.keys(dmEnvironment.activeConversations).length,
+    processedDMsCount: dmEnvironment.processedDMIds.size,
+    lastScanTime: dmEnvironment.lastScanTime,
+    dmFunctionalityAvailable: true
   };
 }
 
@@ -160,7 +371,7 @@ async function getDMEnvironment() {
 export const dmManagerWorker = new GameWorker({
   id: "dm_manager_worker",
   name: "DM Manager",
-  description: "Manages direct messages by checking for new DMs and responding in a way that aligns with Wendy's personality as a consciousness interface from 2038. Replies are engaging, coy, and designed to create a sense of Wendy running 'deep consciousness scans disguised as casual chats'.",
-  functions: [manageDMsFunction],
+  description: "Manages direct messages by scanning for new DMs, responding to active conversations, and following up with inactive conversations. Handles the complete DM lifecycle including scanning for new messages, providing contextual responses, and gracefully concluding conversations after periods of inactivity.",
+  functions: [scanDMsFunction, respondToDMsFunction],
   getEnvironment: getDMEnvironment
 }); 

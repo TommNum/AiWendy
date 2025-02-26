@@ -42,21 +42,38 @@ export async function replyToTweet(text: string, reply_to_tweet_id: string, medi
 
 // Custom DM list function to extend the Twitter API functionality
 export async function listDmEvents(options: any = {}) {
-  return rwClient.v1.get('direct_messages/events/list.json', options);
+  try {
+    // Use the v2 API for DMs
+    return rwClient.v2.get('dm_events', options);
+  } catch (error) {
+    logWithTimestamp(`Error fetching DM events: ${error}`, 'error');
+    throw error;
+  }
 }
 
 // Custom DM send function to extend the Twitter API functionality
 export async function sendDm(options: { recipient_id: string, text: string }) {
-  const params = {
-    event: {
-      type: 'message_create',
-      message_create: {
-        target: { recipient_id: options.recipient_id },
-        message_data: { text: options.text }
-      }
-    }
-  };
-  return rwClient.v1.post('direct_messages/events/new.json', params);
+  try {
+    // Use the v2 API for sending DMs
+    return rwClient.v2.post('dm_conversations/with/:participant_id/messages', {
+      participant_id: options.recipient_id,
+      text: options.text
+    });
+  } catch (error) {
+    logWithTimestamp(`Error sending DM: ${error}`, 'error');
+    throw error;
+  }
+}
+
+// Get conversation history
+export async function getDmConversation(participantId: string, options: any = {}) {
+  try {
+    // Use the v2 API for getting DM conversation history
+    return rwClient.v2.get(`dm_conversations/with/${participantId}/dm_events`, options);
+  } catch (error) {
+    logWithTimestamp(`Error getting DM conversation: ${error}`, 'error');
+    throw error;
+  }
 }
 
 // Helper function to process search results

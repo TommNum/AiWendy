@@ -58,6 +58,11 @@ class GameAgent {
             console.log(`Running worker: ${worker.id}`);
           }
           
+          // Skip dm_manager_worker as it has its own separate execution schedule
+          if (worker.id === 'dm_manager_worker') {
+            continue;
+          }
+          
           // Execute the first function for each worker
           if (worker.functions && worker.functions.length > 0) {
             const functionName = worker.functions[0].name;
@@ -82,10 +87,17 @@ class GameAgent {
       throw new Error(`Function ${functionName} not found in worker ${worker.id}`);
     }
     
-    // Execute the function with our custom logger
-    return await func.executable(args, (message: string) => {
-      this.logger(`[${worker.id}] ${message}`);
-    });
+    try {
+      // Execute the function with our custom logger
+      const result = await func.executable(args, (message: string) => {
+        this.logger(`[${worker.id}:${functionName}] ${message}`);
+      });
+      
+      return result;
+    } catch (error) {
+      this.logger(`[${worker.id}:${functionName}] Error: ${error}`);
+      throw error;
+    }
   }
 }
 
@@ -178,7 +190,28 @@ async function main() {
     }
     
     console.log("Wendy is now running...");
-    await wendyAgent.run(30, { verbose: true }); // Run steps every 30 seconds
+    
+    // Set up specific intervals for DM worker functions
+    setInterval(async () => {
+      try {
+        // Scan for new DMs every 5 minutes
+        await wendyAgent.executeWorkerFunction(dmManagerWorker, "scan_dms");
+      } catch (error) {
+        console.error("Error scanning DMs:", error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    setInterval(async () => {
+      try {
+        // Process active DM conversations every minute
+        await wendyAgent.executeWorkerFunction(dmManagerWorker, "respond_to_dms");
+      } catch (error) {
+        console.error("Error responding to DMs:", error);
+      }
+    }, 60 * 1000); // 1 minute
+    
+    // Run the regular worker steps every 30 seconds
+    await wendyAgent.run(30, { verbose: true });
   } catch (error) {
     console.error("Error running Wendy:", error);
     logToFile(`Error running Wendy: ${error}`);
