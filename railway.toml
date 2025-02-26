@@ -1,0 +1,28 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node dist/src/wendy-twitter.js"
+healthcheckPath = "/status"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+numReplicas = 1
+healthcheckInterval = 30
+
+[deploy.envVars]
+NODE_ENV = "production"
+PORT = "3000"
+LOG_LEVEL = "info"
+HOST = "0.0.0.0"
+
+# Required environment variables
+TWITTER_API_KEY = "${TWITTER_API_KEY}"
+TWITTER_API_SECRET = "${TWITTER_API_SECRET}"
+TWITTER_ACCESS_TOKEN = "${TWITTER_ACCESS_TOKEN}"
+TWITTER_ACCESS_TOKEN_SECRET = "${TWITTER_ACCESS_TOKEN_SECRET}"
+ANTHROPIC_API_KEY = "${ANTHROPIC_API_KEY}"
+
+[service]
+name = "aiwendy-twitter"
