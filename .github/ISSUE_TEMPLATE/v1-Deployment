@@ -1,0 +1,136 @@
+### 6. Docker Deployment
+
+Create a Dockerfile for deployment:
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source files
+COPY . .
+
+# Build the project
+RUN npm run build
+
+# Command to run the application
+CMD [ "npm", "start" ]
+```
+
+Create a docker-compose.yml file:
+
+```yaml
+version: '3'
+services:
+  wendy:
+    build: .
+    env_file: .env
+    restart: always
+    environment:
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+```
+
+### 7. Railway Deployment
+
+To deploy to Railway:
+
+1. Push your code to GitHub
+2. Connect your GitHub repository to Railway
+3. Configure environment variables in Railway
+4. Enable automatic deployments
+
+### 8. Monitoring
+
+Add a monitoring file to ensure features are working correctly:
+
+#### `src/healthcheck.js`
+
+```javascript
+const https = require('https');
+const fs = require('fs');
+
+// Function to check if logs indicate the agent is working
+function checkLogs() {
+  try {
+    const logs = fs.readFileSync('./logs/wendy.log', 'utf8').split('\n').slice(-100);
+    
+    // Check for recent activity (within last hour)
+    const recentLogs = logs.filter(log => {
+      const match = log.match(/\[(.*?)\]/);
+      if (match) {
+        const logTime = new Date(match[1]);
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        return logTime > oneHourAgo;
+      }
+      return false;
+    });
+    
+    if (recentLogs.length === 0) {
+      console.error('No recent log activity');
+      process.exit(1);
+    }
+    
+    // Check for successful tweet posts
+    const successfulTweets = recentLogs.filter(log => 
+      log.includes('Successfully posted tweet')
+    );
+    
+    // Check for successful tweet searches
+    const successfulSearches = recentLogs.filter(log => 
+      log.includes('Successfully processed tweet')
+    );
+    
+    // Check for successful replies
+    const successfulReplies = recentLogs.filter(log => 
+      log.includes('Successfully replied to')
+    );
+    
+    // If none of these activities are found in logs, the agent might be stuck
+    if (successfulTweets.length === 0 && successfulSearches.length === 0 && successfulReplies.length === 0) {
+      console.error('No successful Twitter activities found in recent logs');
+      process.exit(1);
+    }
+    
+    console.log('Health check passed: Agent is active');
+    process.exit(0);
+  } catch (error) {
+    console.error('Health check failed:', error);
+    process.exit(1);
+  }
+}
+
+// Run the health check
+checkLogs();
+```
+
+## Running the Application
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Build the application:
+```bash
+npm run build
+```
+
+3. Start the application:
+```bash
+npm start
+```
+
+4. Or run with Docker Compose:
+```bash
+docker compose up -d

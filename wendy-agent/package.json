@@ -1,0 +1,28 @@
+{
+  "name": "wendy-agent",
+  "version": "1.0.0",
+  "description": "Wendy AI Agent for Twitter using the G.A.M.E Framework",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "lint": "eslint . --ext .ts"
+  },
+  "dependencies": {
+    "@virtuals-protocol/game": "^0.1.8",
+    "dotenv": "^16.4.7",
+    "twitter-api-v2": "^1.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.3",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.56.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
