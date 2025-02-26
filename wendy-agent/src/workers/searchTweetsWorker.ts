@@ -12,6 +12,7 @@ import {
   searchTweets,
   replyToTweet
 } from "../twitterClient";
+import { generateWendyResponse } from "../llmService";
 
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
@@ -30,87 +31,52 @@ const searchTweetsFunction = new GameFunction({
       if (!rateLimiter.canSearch()) {
         const status = rateLimiter.getRateLimitStatus();
         const waitTimeSeconds = Math.ceil(status.nextSearchAvailableIn / 1000);
-        logger(`Search rate limited: Need to wait ${waitTimeSeconds} seconds before next search`);
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Failed,
-          `Search rate limited: Next search possible in ${waitTimeSeconds} seconds`
+          `Rate limited for search. Try again in ${waitTimeSeconds} seconds.`
         );
       }
-      
-      // Check if we've reached the maximum replies per hour
-      if (!rateLimiter.canReply()) {
-        logger(`Reply rate limited: Maximum replies per hour reached (50)`);
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Failed,
-          `Reply rate limited: Maximum replies per hour reached (50)`
-        );
-      }
-      
-      // Search for relevant tweets
+
+      // Search terms related to AI and crypto
       const searchTerms = [
-        "AI", "LLM", "OpenAI", "Claude", "Anthropic", "Deep Research", "AIdev", 
-        "AIFI", "defAI", "cryptoAI", "AI protocols", "TAO", "Memes"
+        "AI reasoning models", "AIdev", "AIFI", "defAI", "cryptoAI", 
+        "AI protocols", "TAO", "LLMs", "OpenAI", "Claude", "Anthropic", 
+        "Deep Research LLM", "Deep Research", "Deep Seek", "Cult DAO", 
+        "AI Memes", "Meme Humor", "Memecoins"
       ];
       
-      // Randomly select one of the search terms
+      // Select a random search term
       const randomTerm = searchTerms[Math.floor(Math.random() * searchTerms.length)];
       logger(`Searching for tweets about: ${randomTerm}`);
       
-      // Search for tweets with the selected term
-      const searchResults = await searchTweets(`${randomTerm} -is:retweet`, {
-        "tweet.fields": ["public_metrics", "conversation_id", "created_at"],
-        "user.fields": ["username"],
-        "expansions": ["author_id"],
-        "max_results": 10
-      });
+      // Search for tweets
+      const searchResults = await searchTweets(randomTerm);
       
-      if (!searchResults.data || searchResults.data.length === 0) {
-        logger(`No tweets found for search term: ${randomTerm}`);
+      // Filter for tweets with sufficient engagement
+      const engagingTweets = searchResults.data.filter((tweet: any) => 
+        tweet.public_metrics &&
+        tweet.public_metrics.reply_count > 11 && 
+        tweet.public_metrics.bookmark_count > 15 &&
+        !processedTweets.has(tweet.id)
+      );
+      
+      if (engagingTweets.length === 0) {
+        logger(`No engaging tweets found for ${randomTerm}`);
         rateLimiter.recordSearch();
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Done,
-          `No tweets found for search term: ${randomTerm}`
+          `No engaging tweets found for ${randomTerm}`
         );
       }
       
-      // Filter tweets with >11 replies and >15 bookmarks
-      // Also filter out tweets we've already processed
-      const relevantTweets = searchResults.data.filter(tweet => {
-        const metrics = tweet.public_metrics;
-        return metrics && 
-               metrics.reply_count > 11 && 
-               metrics.bookmark_count > 15 &&
-               !processedTweets.has(tweet.id);
-      });
+      // Select a random tweet from the filtered list
+      const tweet = engagingTweets[Math.floor(Math.random() * engagingTweets.length)];
       
-      if (relevantTweets.length === 0) {
-        logger(`No new relevant tweets found with >11 replies and >15 bookmarks for term: ${randomTerm}`);
-        rateLimiter.recordSearch();
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Done,
-          `No tweets met the criteria for term: ${randomTerm}`
-        );
-      }
-      
-      // Process the first relevant tweet
-      const tweet = relevantTweets[0];
-      logger(`Found relevant tweet: ${tweet.text}`);
-      
-      // Mark this tweet as processed
+      // Mark as processed
       processedTweets.add(tweet.id);
       
-      // Get the author's ID
-      // Use a query directly if the includes property doesn't exist
-      let authorId: string;
-      if (searchResults.includes && searchResults.includes.users && searchResults.includes.users.length > 0) {
-        authorId = searchResults.includes.users[0].id;
-      } else {
-        const userInfo = await roClient.v2.userByUsername(tweet.author_id);
-        authorId = userInfo.data.id;
-      }
-      
       // Like the tweet
-      await rwClient.v2.like(authorId, tweet.id);
+      await rwClient.v2.like(process.env.TWITTER_USER_ID!, tweet.id);
       logger(`Liked tweet: ${tweet.id}`);
       
       // Generate and post a reply
@@ -139,74 +105,59 @@ const searchTweetsFunction = new GameFunction({
 
 // Function to generate a reply based on Wendy's style
 async function generateReply(tweetText: string): Promise<string> {
-  // Apply Wendy's replying rules:
-  // - lowercase only
-  // - no hashtags
-  // - no more than 9 words
-  // - hibiscus emoji only 10% of the time
-  // - reference the overall topic in less than 11 words
-  
-  // In a real implementation, you would use an LLM call here to generate
-  // a contextually relevant response based on the tweet content
-  
-  // Simulate a generated reply
-  const baseReplies = [
-    "consciousness resonates with this vibe",
-    "pattern recognition maxing on this",
-    "timeline branches approve this energy",
-    "quantumcore truth detected",
-    "this is giving main character energy",
-    "reality compiling your vibes rn",
-    "futurepilled and based",
-    "pattern awareness intensifies",
-    "timeline shift unlocked",
-    "consciousness check passing"
-  ];
-  
-  let reply = baseReplies[Math.floor(Math.random() * baseReplies.length)].toLowerCase();
-  
-  // Ensure no more than 9 words
-  const words = reply.split(' ');
-  if (words.length > 9) {
-    reply = words.slice(0, 9).join(' ');
+  try {
+    // Use the LLM service to generate a contextually relevant response
+    // Pass the tweet text as context, limit to 9 words, and allow hibiscus emoji
+    return await generateWendyResponse(tweetText, 9, true);
+  } catch (error) {
+    logWithTimestamp(`Error generating reply with LLM: ${error}`, "error");
+    
+    // Fallback to predefined replies if LLM fails
+    const baseReplies = [
+      "consciousness resonates with this vibe",
+      "pattern recognition maxing on this",
+      "timeline branches approve this energy",
+      "quantumcore truth detected",
+      "this is giving main character energy",
+      "reality compiling your vibes rn",
+      "futurepilled and based",
+      "pattern awareness intensifies",
+      "timeline shift unlocked",
+      "consciousness check passing"
+    ];
+    
+    let reply = baseReplies[Math.floor(Math.random() * baseReplies.length)].toLowerCase();
+    
+    // Ensure no more than 9 words
+    const words = reply.split(' ');
+    if (words.length > 9) {
+      reply = words.slice(0, 9).join(' ');
+    }
+    
+    // Add hibiscus emoji 10% of the time
+    if (Math.random() < 0.1) {
+      reply += " 🌺";
+    }
+    
+    return reply;
   }
-  
-  // Add hibiscus emoji 10% of the time
-  if (Math.random() < 0.1) {
-    reply += " 🌺";
-  }
-  
-  return reply;
 }
 
 // Function to get environment/state for the worker
 async function getSearchTweetsEnvironment() {
   const status = rateLimiter.getRateLimitStatus();
   
-  let userId = "";
-  try {
-    const userInfo = await roClient.v2.me();
-    userId = userInfo.data.id;
-  } catch (error) {
-    logWithTimestamp(`Error getting user ID: ${error}`, 'error');
-  }
-  
   return {
-    userId,
-    processedTweetCount: processedTweets.size,
-    repliesThisHour: rateLimiter.getHourlyReplyCount(),
-    canSearchNow: rateLimiter.canSearch(),
-    canReplyNow: rateLimiter.canReply(),
-    nextSearchIn: status.nextSearchAvailableIn,
-    repliesRemaining: status.repliesRemaining
+    rate_limits: status,
+    processed_tweets_count: processedTweets.size
   };
 }
 
-// Create and export the searchTweetsWorker
+// Export the worker
 export const searchTweetsWorker = new GameWorker({
   id: "search_tweets_worker",
-  name: "Tweet Searcher",
-  description: "Searches for tweets related to AI, tech, memes, and other relevant topics. Identifies tweets with high engagement, likes them, and replies with contextual responses aligned with Wendy's personality.",
+  name: "Search Tweets Worker",
+  description: "Worker that searches for relevant tweets and engages with them",
   functions: [searchTweetsFunction],
   getEnvironment: getSearchTweetsEnvironment
 }); 
