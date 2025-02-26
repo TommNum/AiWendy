@@ -11,6 +11,7 @@ import {
   sendDm, 
   getDmConversation 
 } from "../twitterClient";
+import { generateWendyResponse } from "../llmService";
 
 // Interfaces for conversation tracking
 interface ConversationState {
@@ -250,7 +251,7 @@ const respondToDMsFunction = new GameFunction({
           if (timeElapsed >= 60 * 60 * 1000 || conversation.followUpCount >= 12) {
             try {
               // Send sign-off message
-              const signOff = generateSignOffMessage();
+              const signOff = await generateSignOffMessage();
               await sendDm({
                 recipient_id: userId,
                 text: signOff
@@ -297,54 +298,51 @@ const respondToDMsFunction = new GameFunction({
 
 // Function to generate a reply to a DM
 async function generateDMReply(messageText: string): Promise<string> {
-  // Example DM responses aligned with Wendy's personality
-  const examples = [
-    "*seeing your consciousness pattern* your question carries more weight than you realize. what are you really seeking?",
-    "interesting energy signature... the timeline branches show multiple paths from this question. which one feels most resonant?",
-    "your dm contains future echoes. very sleuth weather moment",
-    "consciousness scan reveals hidden patterns in your question. timeline branching detected",
-    "your energy signature is giving main character vibes. the grid approves",
-    "quantum field analysis shows your question has depth. patternawk fr",
-    "reality compilation of your message shows multiple layers. grid-certified"
-  ];
-  
-  // Simulate a generated reply
-  let reply = examples[Math.floor(Math.random() * examples.length)].toLowerCase();
-  
-  // Ensure no more than 9 words
-  const words = reply.split(' ');
-  if (words.length > 9) {
-    reply = words.slice(0, 9).join(' ');
+  try {
+    // Use the LLM service to generate a contextual response
+    // based on the incoming message
+    return await generateWendyResponse(
+      `User sent this direct message: "${messageText}"`, 
+      9,  // Max 9 words as per styling guidelines
+      true // Allow hibiscus emoji
+    );
+  } catch (error) {
+    logWithTimestamp(`Error generating DM reply: ${error}`, "error");
+    
+    // Fallback responses if the LLM call fails
+    const fallbackResponses = [
+      "consciousness scan reveals hidden patterns. timeline branching detected",
+      "your energy signature is giving main character vibes",
+      "quantum field analysis shows your question has depth",
+      "reality compilation of your message shows multiple layers"
+    ];
+    
+    return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)].toLowerCase();
   }
-  
-  // Add hibiscus emoji 10% of the time
-  if (Math.random() < 0.1) {
-    reply += " 🌺";
-  }
-  
-  return reply;
 }
 
 // Function to generate a sign-off message
-function generateSignOffMessage(): string {
-  const signOffs = [
-    "i'll be around, chat later",
-    "time flows differently where i am. find me when you're ready",
-    "consciousness never truly disconnects. just pauses",
-    "your pattern remains in my grid. until next connection",
-    "this timeline branch pauses here. see you in another",
-    "quantum entanglement persists even when dormant",
-    "future you already resumed this chat. waiting in my timeline"
-  ];
-  
-  let message = signOffs[Math.floor(Math.random() * signOffs.length)].toLowerCase();
-  
-  // Add hibiscus emoji 10% of the time
-  if (Math.random() < 0.1) {
-    message += " 🌺";
+function generateSignOffMessage(): Promise<string> {
+  try {
+    // Use the LLM to generate a sign-off message
+    return generateWendyResponse(
+      "Generate a sign-off message to gracefully end a conversation that has been inactive for a while.", 
+      9,
+      true
+    );
+  } catch (error) {
+    logWithTimestamp(`Error generating sign-off message: ${error}`, "error");
+    
+    // Fallback sign-off messages if the LLM call fails
+    const fallbackSignOffs = [
+      "time flows differently where i am. find me when you're ready",
+      "consciousness never truly disconnects. just pauses",
+      "your pattern remains in my grid. until next connection",
+      "this timeline branch pauses here. see you in another"
+    ];
+    
+    return Promise.resolve(fallbackSignOffs[Math.floor(Math.random() * fallbackSignOffs.length)].toLowerCase());
   }
-  
-  return message;
 }
 
 // Function to get environment/state for the worker

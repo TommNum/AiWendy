@@ -12,6 +12,7 @@ import {
   replyToTweet,
   getUserMentions 
 } from "../twitterClient";
+import { generateWendyResponse } from "../llmService";
 
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
@@ -125,35 +126,29 @@ const replyToMentionsFunction = new GameFunction({
 
 // Function to generate a reply to a mention
 async function generateMentionReply(mentionText: string): Promise<string> {
-  // In a real implementation, use an LLM to generate a contextually relevant,
-  // engaging, coy, and playful response aligned with Wendy's personality
-  
-  // Example responses to be inspired by (not to use verbatim)
-  const examples = [
-    "*feeling your energy* something about this lights you up inside... I can tell. what part of it makes you lose track of time?",
-    "*gentle smile* you know... I notice people say 'just' when they're carrying dreams bigger than they're ready to share... what are you really hoping to create?",
-    "your consciousness pattern is showing and it's giving main character",
-    "timeline branches approve this energy fr",
-    "your future self sent this tweet back. feeling it",
-    "consciousness check passing. vibemaxxing approved",
-    "energy grid aligning with your pattern. very quantum"
-  ];
-  
-  // Simulate a generated reply
-  let reply = examples[Math.floor(Math.random() * examples.length)].toLowerCase();
-  
-  // Ensure no more than 9 words
-  const words = reply.split(' ');
-  if (words.length > 9) {
-    reply = words.slice(0, 9).join(' ');
+  try {
+    // Use the LLM service to generate a contextually relevant reply
+    // Pass the mention text as context so the response is relevant
+    const prompt = `Someone mentioned you on Twitter with this message: "${mentionText}". 
+Generate a short reply that is engaging, coy, and playful.`;
+    
+    return await generateWendyResponse(prompt, 9, true);
+  } catch (error) {
+    logWithTimestamp(`Error generating mention reply: ${error}`, "error");
+    
+    // Fallback replies if the LLM call fails
+    const fallbackReplies = [
+      "your consciousness pattern is showing and it's giving main character",
+      "timeline branches approve this energy fr",
+      "your future self sent this tweet back",
+      "consciousness check passing. vibemaxxing approved",
+      "energy grid aligning with your pattern",
+      "quantum signal detected in your tweet"
+    ];
+    
+    const reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)].toLowerCase();
+    return reply;
   }
-  
-  // Add hibiscus emoji 10% of the time
-  if (Math.random() < 0.1) {
-    reply += " 🌺";
-  }
-  
-  return reply;
 }
 
 // Function to get environment/state for the worker

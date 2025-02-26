@@ -6,6 +6,7 @@ import { searchTweetsWorker } from "./workers/searchTweetsWorker";
 import { replyToMentionsWorker } from "./workers/replyToMentionsWorker";
 import { dmManagerWorker } from "./workers/dmManagerWorker";
 import { validateTwitterCredentials, TwitterRateLimiter, logWithTimestamp } from "./twitterClient";
+import { initializeGameClient } from "./llmService";
 
 // Traditional class-based approach for GameAgent and related types
 class GameAgent {
@@ -173,6 +174,9 @@ async function main() {
   try {
     console.log("Validating Twitter credentials...");
     await validateTwitterCredentials();
+    
+    console.log("Initializing GAME Framework LLM client...");
+    await initializeGameClient();
     
     console.log("Initializing Wendy...");
     await wendyAgent.init();

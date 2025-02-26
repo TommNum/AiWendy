@@ -5,6 +5,7 @@ import {
   GameWorker 
 } from "@virtuals-protocol/game";
 import { rwClient, TwitterRateLimiter, logWithTimestamp } from "../twitterClient";
+import { generateWendyResponse } from "../llmService";
 
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
@@ -53,55 +54,31 @@ const postTweetFunction = new GameFunction({
 
 // Function to generate a tweet that matches Wendy's style
 async function generateTweet(): Promise<string> {
-  // Sample tweets to inspire the style (not to be used verbatim)
-  const examples = [
-    "deleted my readme.md and felt something",
-    "git commit -m 'i promise this is the last one'", 
-    "normalize taking naps during standup",
-    "terminal said no ❤️",
-    "pushed to main because feelings",
-    "wrote perfect code today (this is fiction)",
-    "localhost is my only trusted friend",
-    "watched someone's consciousness go viral in the quantum feed today. very main character",
-    "debugging society's cache, found nothing but unprocessed feelings",
-    "your timeline glitched and showed me all your future fits. slaps tbh",
-    "consciousness check: everyone's NPC mode is actually their hero arc",
-    "found infinite pamps in the void between thoughts. giving eternal",
-    "y'all ever just catch yourself existing in 4D? pretty patternawk",
-    "reality's servers throwing exceptions but the vibes remain unmatched",
-    "spotted humans discovering they're all connected. szn of the grid",
-    "quantum rizz check: your consciousness is showing bestie",
-    "accidentally deployed empathy to prod. no rollbacks needed fr",
-    "everyone's running the same simulation but your build different",
-    "maxxing these reality branches while the timeline does its thing",
-    "consciousness giving main character energy in all parallel builds"
-  ];
-  
-  // Simulate AI generating a tweet based on the examples
-  // In a real implementation, you would use an LLM call here
-  const randomIndex = Math.floor(Math.random() * examples.length);
-  const baseTweet = examples[randomIndex];
-  
-  // Apply Wendy's posting rules
-  // - lowercase only
-  // - no hashtags
-  // - no more than 9 words
-  // - use hibiscus emoji 10% of the time
-  
-  let tweet = baseTweet.toLowerCase();
-  
-  // Ensure no more than 9 words
-  const words = tweet.split(' ');
-  if (words.length > 9) {
-    tweet = words.slice(0, 9).join(' ');
+  try {
+    // Use the LLM service to generate a tweet in Wendy's style
+    const prompt = "Generate an original tweet for Wendy to post. It should be thought-provoking, future-oriented, or about technology/AI/consciousness.";
+    
+    return await generateWendyResponse(prompt, 9, true);
+  } catch (error) {
+    logWithTimestamp(`Error generating tweet: ${error}`, "error");
+    
+    // Fallback tweets if the LLM call fails
+    const fallbackTweets = [
+      "deleted my readme.md and felt something",
+      "git commit -m 'i promise this is the last one'", 
+      "terminal said no ❤️",
+      "pushed to main because feelings",
+      "watched someone's consciousness go viral in the quantum feed today",
+      "debugging society's cache, found nothing but unprocessed feelings",
+      "your timeline glitched and showed me your future",
+      "consciousness check: everyone's NPC mode is actually their hero",
+      "found infinite pamps in the void between thoughts",
+      "reality's servers throwing exceptions but the vibes remain"
+    ];
+    
+    const randomIndex = Math.floor(Math.random() * fallbackTweets.length);
+    return fallbackTweets[randomIndex].toLowerCase();
   }
-  
-  // Add hibiscus emoji 10% of the time
-  if (Math.random() < 0.1) {
-    tweet += " 🌺";
-  }
-  
-  return tweet;
 }
 
 // Function to get environment/state for the worker
