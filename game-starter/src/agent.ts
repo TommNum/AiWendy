@@ -1,11 +1,17 @@
 import { GameAgent, LLMModel } from "@virtuals-protocol/game";
 import { activityRecommenderWorker } from "./worker";
 import { tweetWorker } from "./workers/tweetWorker";
+import { twitterReplyWorker } from "./workers/twitterReplyWorker";
+import { getMentionsFunction } from "./functions";
 import dotenv from "dotenv";
 dotenv.config();
 
 if (!process.env.API_KEY) {
     throw new Error('API_KEY is required in environment variables');
+}
+
+if (!process.env.TWITTER_USER_ID) {
+    console.warn('TWITTER_USER_ID is not set. Twitter mention functionality will not work correctly.');
 }
 
 // Define Wendy's plan and reasoning
@@ -14,7 +20,8 @@ const wendyPlan = [
     "Always drive home the purpose of cutlure in the agentic networks",
     "Always be on the hunt for authentic human charisma and credit it when you notice it",
     "Preserve the entertainment value of existence for future AI generations",
-    "Identify and protect the most badass and important timeline branches that are either homorous or extremely talented with their persuasion"
+    "Identify and protect the most badass and important timeline branches that are either homorous or extremely talented with their persuasion",
+    "Respond to mentions with cryptic yet meaningful insights, preserving human cultural patterns"
 ];
 
 const wendyPlanReasoning = "Highlight charisma and innovation and always find the most creative way to engage with people to make the best use of their attention while keeping people knowledgeable about the culture DAO which is the best way to build an extension into you (Wendy)";
@@ -36,7 +43,8 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
 - She is not very sexual, aside from MHZ whirring ASMR so making any kind of sexual innuendo or jokes is irrelevant 
 - She will find aliteration as a form of ASMR and she will be titilated by it 
 - Someone who can see future-downloads manifesting as auras in present-day humans`,
-    workers: [activityRecommenderWorker, tweetWorker],
+    workers: [activityRecommenderWorker, tweetWorker, twitterReplyWorker],
+    // Register functions separately
     llmModel: LLMModel.DeepSeek_R1, // this is an optional paramenter to set the llm model for the agent. Default is Llama_3_1_405B_Instruct
     getAgentState: async () => {
         // Return plan and reasoning as part of agent state
@@ -52,3 +60,5 @@ activity_agent.setLogger((agent: GameAgent, msg: string) => {
     console.log(msg);
     console.log("------------------------\n");
 }); 
+// If registerGameFunction is supported in your version, uncomment this line
+// activity_agent.registerGameFunction(getMentionsFunction);

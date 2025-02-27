@@ -1,12 +1,13 @@
 import { activity_agent } from './agent';
+import { virtualsApiRateLimiter, twitterMentionsRateLimiter } from './utils/rateLimiter';
 
 // Define action types for the game protocol
 enum ActionType {
-    CallFunction = "call_function",
-    ContinueFunction = "continue_function",
-    Wait = "wait",
-    GoTo = "go_to",
-    Unknown = "unknown"
+    CallFunction = "CallFunction",
+    ContinueFunction = "ContinueFunction",
+    Wait = "Wait",
+    GoTo = "GoTo",
+    Unknown = "Unknown"
 }
 
 /**
@@ -71,47 +72,54 @@ class RateLimiter {
     }
 }
 
-/**
- * Post an initial tweet and schedule future tweets
- */
+// Initialize and schedule tweets
 async function initializeAndScheduleTweets() {
     try {
-        console.log('🐦 Initializing tweet functionality...');
+        console.log("🐦 Initializing tweet functionality...");
         
-        // Navigate to tweet worker first (if not already there)
-        await activity_agent.step({ verbose: true });
+        // Post an initial tweet at startup
+        const initialTweetStep = await activity_agent.step({ verbose: true });
+        console.log(`Initial tweet step: ${initialTweetStep}`);
         
-        // Generate the initial tweet
-        const generateAction = await activity_agent.step({ verbose: true });
-        if (generateAction === ActionType.CallFunction || generateAction === ActionType.ContinueFunction) {
-            console.log('Generated initial tweet');
-            
-            // Post the tweet
-            const postAction = await activity_agent.step({ verbose: true });
-            console.log(`Initial tweet posted: ${postAction}`);
-        }
-        
-        // Schedule tweet checks every 30 minutes
+        // Schedule regular tweets every 2 hours
         setInterval(async () => {
             try {
                 console.log('🔄 Checking if it\'s time for a new tweet...');
-                
-                // Navigate to tweet worker (if not there)
+                // Generate and post a tweet (the worker will handle rate limiting)
                 await activity_agent.step({ verbose: true });
-                
-                // Generate tweet (this will respect the rate limiting)
-                const generateAction = await activity_agent.step({ verbose: true });
-                if (generateAction === ActionType.CallFunction || generateAction === ActionType.ContinueFunction) {
-                    // Post the tweet
-                    await activity_agent.step({ verbose: true });
-                }
             } catch (error) {
-                console.error('Error in tweet scheduling:', error);
+                console.error("Error scheduling tweet:", error);
             }
-        }, 30 * 60 * 1000); // Check every 30 minutes
+        }, 2 * 60 * 60 * 1000); // 2 hours in milliseconds
         
     } catch (error) {
-        console.error('Error initializing tweet functionality:', error);
+        console.error("Error initializing tweets:", error);
+    }
+}
+
+// Initialize and schedule mention checks
+async function initializeAndScheduleMentions() {
+    try {
+        console.log("🔍 Initializing mention checks...");
+        
+        // The twitterReplyWorker will call the get_mentions function
+        // and will use the twitterMentionsRateLimiter inside the function
+        
+        // Schedule regular mention checks every 2 minutes
+        setInterval(async () => {
+            try {
+                console.log('🔍 Checking for mentions...');
+                // Use generic step() to allow the worker to run
+                // When the agent steps through its process, it will eventually
+                // execute all workers, including the twitter_reply_worker
+                await activity_agent.step({ verbose: true });
+            } catch (error) {
+                console.error("Error checking mentions:", error);
+            }
+        }, 2 * 60 * 1000); // 2 minutes in milliseconds
+        
+    } catch (error) {
+        console.error("Error initializing mention checks:", error);
     }
 }
 
@@ -120,16 +128,16 @@ async function main() {
         // Initialize the agent
         await activity_agent.init();
         
-        // Create rate limiter: 30 calls per 5 minutes
-        const rateLimiter = new RateLimiter(30, 5);
-        
         // Initialize tweet functionality
         await initializeAndScheduleTweets();
+        
+        // Initialize mention checking
+        await initializeAndScheduleMentions();
         
         // Run the agent with rate limiting
         while (true) {
             // Get token before making a call (will wait if needed)
-            await rateLimiter.getToken();
+            await virtualsApiRateLimiter.getToken();
             
             // Execute step after getting a token
             console.log(`Executing step at ${new Date().toISOString()}`);
