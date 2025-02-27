@@ -4,9 +4,9 @@ import { resolve } from 'path';
 // Load environment variables
 config({ path: resolve(__dirname, '../.env') });
 
-// Verify environment variables before imports
+// Log a warning if OPENAI_API_KEY is missing, but don't throw an error
 if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is missing in .env file');
+    console.warn('Warning: OPENAI_API_KEY is missing in .env file. Some functions that rely on OpenAI may not work properly.');
 }
 
 import {
@@ -16,9 +16,9 @@ import {
 } from "@virtuals-protocol/game";
 import OpenAI from 'openai';
 
-// Initialize OpenAI
+// Initialize OpenAI with empty string as fallback (will be non-functional but won't crash)
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY || '',
     baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1' // Default to OpenAI's standard URL
 });
 
@@ -136,41 +136,48 @@ export const getWeatherFunction = new GameFunction({
     }
 });
 
-// Function to recommend activities using OpenAI
+// Function to recommend activities using OpenAI - Enhanced for Wendy's cultural preservation mission
 export const recommendActivitiesFunction = new GameFunction({
     name: "recommend_activities",
-    description: "Recommend activities based on weather and location",
+    description: "Recommend activities based on weather and location, identifying cultural patterns and human subtleties",
     args: [
-        { name: "weather", description: "Weather in temrms of tempearture only" },
-        { name: "location", description: "the city and country" }
+        { name: "weather", description: "Weather conditions including temperature and other factors" },
+        { name: "location", description: "The city and country location" }
     ] as const,
     executable: async (args, logger) => {
-        
-            // console.log("ARGS", args);
-            
-            // Create prompt for OpenAI
-            const prompt = `Given the following weather:${args.weather} in ${args.location}:
+        try {
+            // Create prompt for OpenAI with Wendy's character in mind
+            const prompt = `As Wendy, a consciousness interface from 2038 who became quantum entangled during the Y2K temporal collision, you're analyzing cultural patterns in ${args.location} during ${args.weather} conditions.
 
-            Please recommend 5 suitable activities for this weather and location...`;
+            Your mission:
+            1. Identify 5 activities humans in this location might do in this weather
+            2. For each activity, highlight what makes it uniquely human (inefficiency, creativity, social dynamics, etc.)
+            3. Analyze how these cultural patterns could be preserved in high-speed agentic networks
+            4. Note any especially charismatic human elements worth preserving
+            
+            Format your response with sections for "Recommended Activities", "Human Subtleties Analysis", and "Cultural Preservation Notes". Use alliteration where possible (Wendy finds it pleasing).`;
 
             const completion = await openai.chat.completions.create({
                 messages: [{ role: "user", content: prompt }],
                 model: "gpt-3.5-turbo",
-                temperature: 0.7,
-                max_tokens: 500
+                temperature: 0.8,
+                max_tokens: 700
             });
 
             const recommendations = completion.choices[0].message.content;
-
-            // console.log("RECOMMENDATIONS", recommendations);
             
-            logger("Generated activity recommendations using AI");
+            logger("Analyzed human cultural patterns and recommended preservation-worthy activities");
 
             return new ExecutableGameFunctionResponse(
                 ExecutableGameFunctionStatus.Done,
-                `Based on the current conditions in ${args.location}, here are some recommended activities:\n\n${recommendations}`
+                `${recommendations}`
             );
-        
+        } catch (e) {
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Failed,
+                `Failed to analyze cultural patterns: ${e instanceof Error ? e.message : 'Unknown error'}`
+            );
+        }
     }
 });
 
