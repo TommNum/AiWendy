@@ -1,9 +1,12 @@
 import { GameAgent, LLMModel } from "@virtuals-protocol/game";
-import { agentStateWorker } from "./workers/agentStateWorker";
-import { tweetWorker } from "./workers/tweetWorker";
-import { twitterReplyWorker } from "./workers/twitterReplyWorker";
-import { twitterSearchWorker } from "./workers/twitterSearchWorker";
-import { daoEngagementWorker } from "./workers/daoEngagementWorker";
+// Import all workers from the index file
+import { 
+  agentStateWorker, 
+  tweetWorker, 
+  twitterReplyWorker, 
+  twitterSearchWorker, 
+  daoEngagementWorker 
+} from "./workers";
 import { getMentionsFunction } from "./functions";
 import dotenv from "dotenv";
 dotenv.config();

@@ -1,6 +1,6 @@
 import { activity_agent } from './agent';
 import { virtualsApiRateLimiter, twitterMentionsRateLimiter } from './utils/rateLimiter';
-import { daoEngagementWorker } from './workers/daoEngagementWorker';
+import { daoEngagementWorker } from './workers';
 
 // Define action types for the game protocol
 enum ActionType {
