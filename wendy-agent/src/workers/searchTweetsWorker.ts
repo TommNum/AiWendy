@@ -41,8 +41,8 @@ const searchTweetsFunction = new GameFunction({
       const searchTerms = [
         "AI reasoning models", "AIdev", "AIFI", "defAI", "cryptoAI", 
         "AI protocols", "TAO", "LLMs", "OpenAI", "Claude", "Anthropic", 
-        "Deep Research LLM", "Deep Research", "Deep Seek", "Cult DAO", 
-        "AI Memes", "Meme Humor", "Memecoins"
+        "Deep Research LLM", "Deep Research", "Deep Seek", "Culture DAO", 
+        "AI Memes", "Meme Humor", "@culturecapfun", "Memecoins"
       ];
       
       // Select a random search term
