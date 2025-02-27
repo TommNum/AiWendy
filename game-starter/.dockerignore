@@ -1,16 +1,35 @@
 # .dockerignore
 
-# Ignore node_modules from the build context
+# Node modules
 node_modules
+
+# Plugins directory (has TypeScript errors)
+plugins/
+
+# Build artifacts
+dist
+*.log
+
+# Git files
+.git
+.gitignore
+
+# Environment files (except .env.example)
+.env*
+!.env.example
+
+# IDE files
+.vscode
+.idea
+
+# Temporary files
+*.tmp
+*.temp
 
 # Ignore logs and temporary files
 *.log
 *.tmp
 .DS_Store
-
-# Ignore Git files and metadata
-.git
-.gitignore
 
 # Ignore IDE and editor config files
 .vscode
@@ -18,5 +37,4 @@ node_modules
 *.swp
 
 # Ignore build artifacts from the host
-dist
 build

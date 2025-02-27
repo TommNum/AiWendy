@@ -33,14 +33,22 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python
 # Set the working directory
 WORKDIR /app
 
-# Copy application code
-COPY . .
+# Copy package files first (for better layer caching)
+COPY package*.json ./
 
 # Install dependencies
 RUN npm install --no-frozen-lockfile
 
 # Install TypeScript globally
 RUN npm install -g typescript
+
+# Copy only the game-starter source files
+COPY tsconfig.json ./
+COPY src/ ./src/
+COPY .env* ./
+
+# Create data directory
+RUN mkdir -p ./data
 
 # Build the project
 RUN npm run build && npm prune --production
@@ -60,11 +68,16 @@ RUN apt-get update && \
 # Set the working directory
 WORKDIR /app
 
+# Create data directory
+RUN mkdir -p ./data
+
 # Copy built artifacts and production dependencies from the builder stage
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/data/ ./data/
+COPY --from=builder /app/.env* ./
 
 # Expose necessary ports
 # EXPOSE 3000
