@@ -32,7 +32,7 @@ const postTweetFunction = new GameFunction({
       const tweet = await generateTweet();
       logger(`Posting tweet: ${tweet}`);
       
-      await rwClient.v2.tweet(tweet);
+      await rwClient.v2.tweet({ text: tweet });
       
       // Record the tweet
       rateLimiter.recordTweet();
