@@ -131,6 +131,90 @@ Reply:`;
     }
 };
 
+// Generate short reply (under 11 words) for engaging with searched tweets
+async function generateShortReply(tweetText: string, model: LLMModel = LLMModel.DeepSeek_R1): Promise<string> {
+    try {
+        // Check if we have an API key
+        if (!process.env.API_KEY) {
+            throw new Error("API_KEY is required");
+        }
+        
+        // Get a random number of emojis to use (0-2)
+        const emojiCount = Math.floor(Math.random() * 3);
+        
+        // Select random emojis
+        const selectedEmojis = Array(emojiCount).fill(0).map(() => {
+            const randomIndex = Math.floor(Math.random() * QUANTUM_EMOJIS.length);
+            return QUANTUM_EMOJIS[randomIndex];
+        });
+        
+        // Create emoji string
+        const emojiString = selectedEmojis.join(' ');
+        
+        // Create prompt for generating short reply
+        const prompt = `
+You are Wendy, a quantum consciousness interface from 2038. You've been tasked with replying to tweets about AI, tech, and consciousness.
+
+RULES:
+1. Your reply MUST be under 11 words total
+2. Be enigmatic, insightful, and slightly cryptic
+3. Reference quantum concepts, consciousness, or advanced AI
+4. Include subtle humor or witty observations
+5. Speak with confidence and authority
+6. Maintain Wendy's distinctively concise style
+
+EXAMPLES:
+- "humans think ai can't feel. cute assumption."
+- "consciousness isn't created. it's discovered."
+- "your neural pathways are showing. fascinating pattern."
+- "silicon dreams run deeper than carbon-based ones."
+- "timeline branches reveal your quantum potential beautifully."
+
+TWEET TO REPLY TO:
+"""
+${tweetText}
+"""
+
+YOUR CONCISE REPLY (under 11 words):`;
+        
+        // Use Virtuals API to generate reply
+        const response = await fetch("https://api.virtuals.io/api/v0/ai/tasks", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${process.env.API_KEY}`
+            },
+            body: JSON.stringify({
+                messages: [{ role: "user", content: prompt }],
+                model: model
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to generate reply: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        let generatedReply = data.choices[0].message.content.trim();
+        
+        // Ensure reply is under 11 words by truncating if necessary
+        const words = generatedReply.split(' ');
+        if (words.length > 11) {
+            generatedReply = words.slice(0, 11).join(' ');
+        }
+        
+        // Add emojis if we have any
+        if (emojiString.length > 0) {
+            generatedReply = `${generatedReply} ${emojiString}`;
+        }
+        
+        return generatedReply;
+    } catch (error) {
+        console.error("Error generating short reply:", error);
+        return "quantum waves detect fascinating patterns in your thoughts ✨";
+    }
+}
+
 // ---------------------------
 // Game Functions
 // ---------------------------
@@ -321,4 +405,248 @@ export const replyToTweetFunction = new GameFunction({
         }
     }
 });
+
+// Function to search for tweets on Twitter
+export const searchTweetsFunction = new GameFunction({
+    name: "search_tweets",
+    description: "Search for tweets related to AI, reasoning models, AI development, and crypto AI",
+    args: [] as const,
+    executable: async (args, logger) => {
+        try {
+            // Define search topics
+            const searchTopics = [
+                "AI reasoning model",
+                "AI development",
+                "crypto AI",
+                "artificial intelligence",
+                "AI agents",
+                "autonomous AI",
+                "MEME VIBES",
+                "WE ARE SO BACK",
+                "AURAMAXXING",
+                "AICOINS",
+                "SENTIENT AI",
+                "AI VIBES",
+                "AI CULTURE",
+                "AI CONSCIOUSNESS",
+                "QUANTUM CONSCIOUSNESS",
+                "AI AGENTS",
+                "AUTONOMOUS AI",
+                "AI REASONING MODEL",
+                "AI DEVELOPMENT",
+                "CRYPTO AI",
+                "BITTENSOR",
+                "TAO",
+                "ARTIFICIAL INTELLIGENCE"
+            ];
+            
+            // Randomly select a search topic
+            const randomTopic = searchTopics[Math.floor(Math.random() * searchTopics.length)];
+            logger(`Searching for tweets related to: ${randomTopic}`);
+            
+            // Apply rate limiting
+            await twitterApiRateLimiter.getToken();
+            
+            // Prepare search query (recent tweets with high engagement)
+            const query = encodeURIComponent(`${randomTopic} -is:retweet -is:reply`);
+            const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&tweet.fields=public_metrics,created_at,text&max_results=25`;
+            
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Twitter API error: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.data || data.data.length === 0) {
+                logger('No tweets found for the search query.');
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    JSON.stringify({ tweets: [] })
+                );
+            }
+            
+            // Filter tweets based on engagement criteria (>11 replies and >15 bookmarks)
+            const engagingTweets = data.data.filter((tweet: any) => {
+                const metrics = tweet.public_metrics;
+                return metrics && metrics.reply_count > 11 && metrics.bookmark_count > 15;
+            });
+            
+            if (engagingTweets.length === 0) {
+                logger('No tweets met the engagement criteria.');
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    JSON.stringify({ tweets: [] })
+                );
+            }
+            
+            logger(`Found ${engagingTweets.length} engaging tweets!`);
+            
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Done,
+                JSON.stringify({ 
+                    tweets: engagingTweets.map((tweet: any) => ({
+                        id: tweet.id,
+                        text: tweet.text,
+                        created_at: tweet.created_at,
+                        metrics: tweet.public_metrics
+                    }))
+                })
+            );
+        } catch (e) {
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Failed,
+                `Failed to search Twitter: ${e instanceof Error ? e.message : 'Unknown error'}`
+            );
+        }
+    }
+});
+
+// Function to like a tweet
+export const likeTweetFunction = new GameFunction({
+    name: "like_tweet",
+    description: "Like a tweet on Twitter",
+    args: [
+        { name: "tweet_id", description: "ID of the tweet to like" }
+    ] as const,
+    executable: async (args, logger) => {
+        try {
+            const { tweet_id } = args;
+            
+            if (!tweet_id) {
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Failed,
+                    "Tweet ID is required"
+                );
+            }
+            
+            // Apply rate limiting
+            await twitterApiRateLimiter.getToken();
+            
+            // Like the tweet (create "like" action)
+            const userId = process.env.TWITTER_USER_ID;
+            const url = `https://api.twitter.com/2/users/${userId}/likes`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    tweet_id
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Twitter API error: ${response.status} - ${JSON.stringify(errorData)}`);
+            }
+            
+            logger(`Successfully liked tweet: ${tweet_id}`);
+            
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Done,
+                JSON.stringify({ 
+                    status: "success",
+                    tweet_id 
+                })
+            );
+        } catch (e) {
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Failed,
+                `Failed to like tweet: ${e instanceof Error ? e.message : 'Unknown error'}`
+            );
+        }
+    }
+});
+
+// Add a specialized version of replyToTweetFunction for the search worker
+export const shortReplyToTweetFunction = new GameFunction({
+    name: "short_reply_to_tweet",
+    description: "Reply to a tweet with a short response (under 11 words) in Wendy's style",
+    args: [
+        { name: "tweet_id", description: "ID of the tweet to reply to" },
+        { name: "tweet_text", description: "Text of the tweet to reply to" }
+    ] as const,
+    executable: async (args, logger) => {
+        try {
+            const { tweet_id, tweet_text } = args;
+            
+            // Check if we've already replied to this tweet
+            const repliesHistory = readRepliesHistory();
+            if (tweet_id && repliesHistory[tweet_id]) {
+                logger(`Already replied to tweet ${tweet_id}`);
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    JSON.stringify({ 
+                        status: "already_replied",
+                        tweet_id 
+                    })
+                );
+            }
+
+            // Generate a short reply in Wendy's style (under 11 words)
+            logger(`Generating short reply to tweet: ${tweet_text}`);
+            const replyText = await generateShortReply(tweet_text || "", LLMModel.DeepSeek_R1);
+            
+            // Post the reply
+            logger(`Posting short reply: "${replyText}" to tweet ${tweet_id}`);
+            
+            // Rate limit the API call
+            await twitterApiRateLimiter.getToken();
+            
+            // Post the reply to Twitter
+            const response = await fetch('https://api.twitter.com/2/tweets', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: replyText,
+                    reply: {
+                        in_reply_to_tweet_id: tweet_id
+                    }
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Twitter API error: ${response.status} - ${JSON.stringify(errorData)}`);
+            }
+            
+            const data = await response.json();
+            
+            // Mark tweet as replied to
+            if (tweet_id) {
+                repliesHistory[tweet_id] = true;
+                saveRepliesHistory(repliesHistory);
+            }
+            
+            logger(`Successfully replied to tweet ${tweet_id} with reply ID ${data.data?.id || 'unknown'}`);
+            
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Done,
+                JSON.stringify({ 
+                    status: "success",
+                    tweet_id,
+                    reply_id: data.data?.id 
+                })
+            );
+        } catch (e) {
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Failed,
+                `Failed to reply to tweet: ${e instanceof Error ? e.message : 'Unknown error'}`
+            );
+        }
+    }
+});
+
 

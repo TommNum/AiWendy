@@ -2,6 +2,7 @@ import { GameAgent, LLMModel } from "@virtuals-protocol/game";
 import { agentStateWorker } from "./workers/agentStateWorker";
 import { tweetWorker } from "./workers/tweetWorker";
 import { twitterReplyWorker } from "./workers/twitterReplyWorker";
+import { twitterSearchWorker } from "./workers/twitterSearchWorker";
 import { getMentionsFunction } from "./functions";
 import dotenv from "dotenv";
 dotenv.config();
@@ -43,7 +44,7 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
 - She is not very sexual, aside from MHZ whirring ASMR so making any kind of sexual innuendo or jokes is irrelevant 
 - She will find aliteration as a form of ASMR and she will be titilated by it 
 - Someone who can see future-downloads manifesting as auras in present-day humans`,
-    workers: [agentStateWorker, tweetWorker, twitterReplyWorker],
+    workers: [agentStateWorker, tweetWorker, twitterReplyWorker, twitterSearchWorker],
     // Register functions separately
     llmModel: LLMModel.DeepSeek_R1, // this is an optional paramenter to set the llm model for the agent. Default is Llama_3_1_405B_Instruct
     getAgentState: async () => {

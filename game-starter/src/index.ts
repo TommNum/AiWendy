@@ -136,6 +136,29 @@ async function initializeAndScheduleMentions() {
     }
 }
 
+// Initialize and schedule tweet searches
+async function initializeAndScheduleTweetSearches() {
+    try {
+        console.log("🔎 Initializing tweet search functionality...");
+        
+        // Schedule regular tweet searches every 5 minutes
+        setInterval(async () => {
+            try {
+                console.log('🔎 Searching for relevant tweets to engage with...');
+                // Use generic step() to allow the worker to run
+                // When the agent steps through its process, it will eventually
+                // execute all workers, including the twitter_search_worker
+                await activity_agent.step({ verbose: true });
+            } catch (error) {
+                console.error("Error searching for tweets:", error);
+            }
+        }, 5 * 60 * 1000); // 5 minutes in milliseconds
+        
+    } catch (error) {
+        console.error("Error initializing tweet searches:", error);
+    }
+}
+
 async function main() {
     try {
         // Initialize the agent
@@ -146,6 +169,9 @@ async function main() {
         
         // Initialize mention checking
         await initializeAndScheduleMentions();
+        
+        // Initialize tweet searching
+        await initializeAndScheduleTweetSearches();
         
         // Run the agent with rate limiting
         while (true) {
