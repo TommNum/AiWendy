@@ -7,6 +7,7 @@ import {
 } from "@virtuals-protocol/game";
 import fs from 'fs';
 import path from 'path';
+import { twitterTweetsRateLimiter } from '../utils/rateLimiter';
 
 // Quantum/spiritual/cute emojis collection for random selection
 const SPECIAL_EMOJIS = [
@@ -98,8 +99,18 @@ const saveTweetHistory = (lastTweetTime: string) => {
     }
 };
 
+interface TwitterResponse {
+    success: boolean;
+    message: string;
+    tweet_id?: string;
+    timestamp?: string;
+    rate_limited?: boolean;
+    retry_after?: string;
+    details?: string;
+}
+
 // Function to post to Twitter API v2
-const postToTwitter = async (tweet: string): Promise<{ success: boolean, message: string }> => {
+const postToTwitter = async (tweet: string): Promise<TwitterResponse> => {
     try {
         // Check for Twitter credentials
         if (!process.env.TWITTER_API_KEY || 
@@ -114,6 +125,8 @@ const postToTwitter = async (tweet: string): Promise<{ success: boolean, message
             };
         }
 
+        console.log(`Posting tweet to Twitter API: "${tweet}"`);
+
         // Twitter API v2 endpoint for posting a tweet
         const response = await fetch('https://api.twitter.com/2/tweets', {
             method: 'POST',
@@ -124,7 +137,11 @@ const postToTwitter = async (tweet: string): Promise<{ success: boolean, message
             body: JSON.stringify({ text: tweet })
         });
 
+        // Log response status
+        console.log(`Twitter API response status: ${response.status} ${response.statusText}`);
+        
         const data = await response.json();
+        console.log(`Twitter API response data: ${JSON.stringify(data, null, 2)}`);
         
         if (response.ok && data && typeof data === 'object') {
             // Extract ID safely
@@ -135,22 +152,60 @@ const postToTwitter = async (tweet: string): Promise<{ success: boolean, message
             
             // Save tweet timestamp
             saveTweetHistory(new Date().toISOString());
+            console.log(`Tweet posted successfully with ID: ${tweetId}`);
             return {
                 success: true,
-                message: `Tweet posted successfully with ID: ${tweetId}`
+                message: `Tweet posted successfully with ID: ${tweetId}`,
+                tweet_id: tweetId,
+                timestamp: new Date().toISOString()
             };
         } else {
-            console.error("Twitter API error:", data);
+            // Enhanced error logging
+            let errorMessage = "Unknown Twitter API error";
+            
+            if (data && typeof data === 'object') {
+                // Try to extract error details
+                if (data.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+                    const errors = data.errors.map((e: any) => {
+                        return `Code: ${e.code || 'unknown'}, Message: ${e.message || 'unknown'}`;
+                    }).join('; ');
+                    errorMessage = `Twitter API errors: ${errors}`;
+                } else if (data.detail) {
+                    errorMessage = `Twitter API error: ${data.detail}`;
+                } else if (data.title) {
+                    errorMessage = `Twitter API error: ${data.title}`;
+                }
+            }
+            
+            console.error("Twitter API error:", errorMessage, data);
+            
+            // Special handling for rate limits (HTTP 429)
+            if (response.status === 429) {
+                const retryAfter = response.headers.get('x-rate-limit-reset') || 
+                                  (data && data.retry_after) || 
+                                  '900'; // Default to 15 minutes
+                
+                console.error(`RATE LIMIT EXCEEDED: Twitter API rate limit reached. Retry after: ${retryAfter}`);
+                return {
+                    success: false,
+                    message: `Twitter API rate limit exceeded. Retry after: ${retryAfter}`,
+                    rate_limited: true,
+                    retry_after: retryAfter
+                };
+            }
+            
             return {
                 success: false,
-                message: `Twitter API error: ${JSON.stringify(data)}`
+                message: errorMessage,
+                details: JSON.stringify(data)
             };
         }
     } catch (error) {
-        console.error("Error posting to Twitter:", error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error("Exception in postToTwitter:", errorMessage);
         return {
             success: false,
-            message: `Error posting to Twitter: ${error instanceof Error ? error.message : String(error)}`
+            message: `Exception while posting tweet: ${errorMessage}`
         };
     }
 };
@@ -217,7 +272,14 @@ const postTweetFunction = new GameFunction({
     ] as const,
     executable: async (args, logger) => {
         try {
-            // Check rate limiting
+            // Check basic rate limiting with our custom token bucket
+            await twitterTweetsRateLimiter.getToken();
+            
+            // Log current status
+            const tweetRateLimitStatus = twitterTweetsRateLimiter.getStatus();
+            logger(`Twitter tweets rate limit status: ${tweetRateLimitStatus.currentTokens.toFixed(2)}/${tweetRateLimitStatus.maxTokens} tokens available. Used ${tweetRateLimitStatus.requestsThisInterval} this interval.`);
+            
+            // Old rate limiting code - using timestamp - keeping for redundancy
             const { lastTweetTime } = readTweetHistory();
             const currentTime = new Date();
             
@@ -227,7 +289,7 @@ const postTweetFunction = new GameFunction({
                 
                 if (timeSinceLastTweet < oneHourInMs) {
                     const timeUntilNextTweet = Math.ceil((oneHourInMs - timeSinceLastTweet) / (60 * 1000));
-                    logger(`Rate limited: Next tweet allowed in ${timeUntilNextTweet} minutes`);
+                    logger(`Additional time-based rate limiting: Next tweet allowed in ${timeUntilNextTweet} minutes`);
                     
                     return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Failed,
@@ -250,15 +312,13 @@ const postTweetFunction = new GameFunction({
             // Call the Twitter API
             const result = await postToTwitter(args.tweet_content);
             
+            // Log the result with more details
+            logger(`Tweet posting result: ${JSON.stringify(result)}`);
+            
             if (result.success) {
                 return new ExecutableGameFunctionResponse(
                     ExecutableGameFunctionStatus.Done,
-                    JSON.stringify({
-                        status: "success",
-                        tweet: args.tweet_content,
-                        timestamp: new Date().toISOString(),
-                        message: result.message
-                    })
+                    JSON.stringify(result)
                 );
             } else {
                 return new ExecutableGameFunctionResponse(
@@ -267,9 +327,12 @@ const postTweetFunction = new GameFunction({
                 );
             }
         } catch (e) {
+            const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+            logger(`ERROR in postTweetFunction: ${errorMessage}`);
+            
             return new ExecutableGameFunctionResponse(
                 ExecutableGameFunctionStatus.Failed,
-                `Failed to post tweet: ${e instanceof Error ? e.message : 'Unknown error'}`
+                `Failed to post tweet: ${errorMessage}`
             );
         }
     }

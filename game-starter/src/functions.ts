@@ -258,32 +258,92 @@ export const getMentionsFunction = new GameFunction({
     args: [] as const,
     executable: async (args, logger) => {
         try {
-            // Apply rate limiting - 2 times per 5 minutes
+            // Log current rate limit status before consuming a token
+            const mentionsRateLimitStatus = twitterMentionsRateLimiter.getStatus();
+            logger(`Current Twitter mentions rate limit status: ${mentionsRateLimitStatus.currentTokens.toFixed(2)}/${mentionsRateLimitStatus.maxTokens} tokens available`);
+            
+            // Apply rate limiting
             await twitterMentionsRateLimiter.getToken();
             
             logger(`Checking for mentions of @${process.env.TWITTER_HANDLE || 'AiWendy'}...`);
             
+            if (!process.env.TWITTER_USER_ID || !process.env.TWITTER_BEARER_TOKEN) {
+                logger('ERROR: Missing Twitter credentials (TWITTER_USER_ID or TWITTER_BEARER_TOKEN)');
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Failed,
+                    JSON.stringify({ 
+                        error: "Missing Twitter credentials", 
+                        mentions: [] 
+                    })
+                );
+            }
+            
             // Fetch mentions from Twitter API v2
             const url = `https://api.twitter.com/2/users/${process.env.TWITTER_USER_ID}/mentions?expansions=author_id&tweet.fields=created_at,text`;
             
+            logger(`Fetching mentions from Twitter API: ${url}`);
+            
             const response = await fetch(url, {
                 headers: {
-                    'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,
+                    'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`,
                     'Content-Type': 'application/json',
                 }
             });
             
+            // Log the response status
+            logger(`Twitter API response status: ${response.status} ${response.statusText}`);
+            
             if (!response.ok) {
-                throw new Error(`Twitter API error: ${response.status} ${response.statusText}`);
+                // Parse response for detailed error info
+                let errorData: any = {};
+                try {
+                    errorData = await response.json();
+                } catch (e) {
+                    // If JSON parsing fails, just use the status text
+                }
+                
+                const errorMessage = `Twitter API error: ${response.status} ${response.statusText}`;
+                const errorDetails = JSON.stringify(errorData);
+                
+                logger(`ERROR: ${errorMessage} - ${errorDetails}`);
+                
+                // Special handling for rate limiting errors (HTTP 429)
+                if (response.status === 429) {
+                    logger('RATE LIMIT EXCEEDED: Twitter API rate limit reached, backing off for next cycle');
+                    // Wait until the next check cycle rather than retrying immediately
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Failed,
+                        JSON.stringify({ 
+                            error: "Twitter API rate limit exceeded", 
+                            details: errorDetails,
+                            mentions: [] 
+                        })
+                    );
+                }
+                
+                throw new Error(`${errorMessage} - ${errorDetails}`);
             }
             
             const data = await response.json();
+            logger(`Twitter API response data: ${JSON.stringify(data, null, 2)}`);
+            
+            // Handle case where data is malformed or empty
+            if (!data.data) {
+                logger('WARNING: Twitter API returned no data or unexpected format');
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    JSON.stringify({ 
+                        warning: "Twitter API returned no data or unexpected format",
+                        mentions: [] 
+                    })
+                );
+            }
             
             // Read existing mentions history
             const mentionsHistory = readMentionsHistory();
             
             // Find new mentions
-            const newMentions = data.data?.filter((tweet: any) => !mentionsHistory[tweet.id]) || [];
+            const newMentions = data.data.filter((tweet: any) => !mentionsHistory[tweet.id]) || [];
             
             if (newMentions.length === 0) {
                 logger('No new mentions found.');
@@ -296,6 +356,7 @@ export const getMentionsFunction = new GameFunction({
             // Add new mentions to history
             newMentions.forEach((tweet: any) => {
                 mentionsHistory[tweet.id] = true;
+                logger(`New mention found: ${tweet.id} - ${tweet.text}`);
             });
             
             // Save updated history
@@ -315,9 +376,15 @@ export const getMentionsFunction = new GameFunction({
                 })
             );
         } catch (e) {
+            const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+            logger(`ERROR in getMentionsFunction: ${errorMessage}`);
+            
             return new ExecutableGameFunctionResponse(
                 ExecutableGameFunctionStatus.Failed,
-                `Failed to fetch Twitter mentions: ${e instanceof Error ? e.message : 'Unknown error'}`
+                JSON.stringify({
+                    error: `Failed to fetch Twitter mentions: ${errorMessage}`,
+                    mentions: []
+                })
             );
         }
     }

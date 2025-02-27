@@ -106,7 +106,7 @@ async function initializeAndScheduleMentions() {
         // The twitterReplyWorker will call the get_mentions function
         // and will use the twitterMentionsRateLimiter inside the function
         
-        // First interval: Schedule regular mention checks every 3 minutes
+        // First interval: Schedule regular mention checks every 5 minutes instead of 3
         setInterval(async () => {
             try {
                 console.log('🔍 Checking for mentions...');
@@ -117,9 +117,9 @@ async function initializeAndScheduleMentions() {
             } catch (error) {
                 console.error("Error checking mentions:", error);
             }
-        }, 3 * 60 * 1000); // 3 minutes in milliseconds
+        }, 5 * 60 * 1000); // 5 minutes in milliseconds (changed from 3)
         
-        // Second interval: Additional mention checks in Twitter-only mode every 3 minutes
+        // Second interval: Additional mention checks in Twitter-only mode every 10 minutes instead of 3
         setInterval(async () => {
             try {
                 console.log('🔍 Checking for mentions in Twitter-only mode...');
@@ -130,7 +130,7 @@ async function initializeAndScheduleMentions() {
             } catch (error) {
                 console.error("Error in Twitter-only mode loop:", error);
             }
-        }, 3 * 60 * 1000); // 3 minutes in milliseconds
+        }, 10 * 60 * 1000); // 10 minutes in milliseconds (changed from 3)
         
     } catch (error) {
         console.error("Error initializing mention checks:", error);
@@ -142,7 +142,7 @@ async function initializeAndScheduleTweetSearches() {
     try {
         console.log("🔎 Initializing tweet search functionality...");
         
-        // Schedule regular tweet searches every 5 minutes
+        // Schedule regular tweet searches every 15 minutes instead of 5
         setInterval(async () => {
             try {
                 console.log('🔎 Searching for relevant tweets to engage with...');
@@ -153,7 +153,7 @@ async function initializeAndScheduleTweetSearches() {
             } catch (error) {
                 console.error("Error searching for tweets:", error);
             }
-        }, 5 * 60 * 1000); // 5 minutes in milliseconds
+        }, 15 * 60 * 1000); // 15 minutes in milliseconds (changed from 5)
         
     } catch (error) {
         console.error("Error initializing tweet searches:", error);
