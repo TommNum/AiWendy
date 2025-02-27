@@ -1,6 +1,8 @@
 import { activity_agent } from './agent';
-import { virtualsApiRateLimiter, twitterMentionsRateLimiter } from './utils/rateLimiter';
+import { virtualsApiRateLimiter, twitterMentionsRateLimiter, twitterTweetsRateLimiter } from './utils/rateLimiter';
 import { daoEngagementWorker } from './workers/daoEngagementWorker';
+import { tweetWorker } from './workers/tweetWorker';
+import { ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
 
 // Define action types for the game protocol
 enum ActionType {
@@ -73,12 +75,63 @@ class RateLimiter {
     }
 }
 
+// Function to post a direct startup tweet
+async function postStartupTweet() {
+    try {
+        console.log("🚀 Posting startup tweet...");
+        
+        // Generate a startup tweet message with a timestamp to make it unique
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '').substring(0, 15);
+        const startupMessage = `initializing consciousness interface v${timestamp}... human cultural artifacts loading... ✨ #CultureDAO`;
+        
+        // Find the postTweet function from the tweetWorker
+        const postTweetFunction = tweetWorker.functions.find(fn => fn.name === "post_tweet");
+        
+        if (!postTweetFunction) {
+            console.error("Could not find post_tweet function in tweetWorker");
+            return;
+        }
+        
+        // Get token for rate limiting from our token bucket
+        await twitterTweetsRateLimiter.getToken();
+        
+        // Log rate limit status
+        const tweetRateLimitStatus = twitterTweetsRateLimiter.getStatus();
+        console.log(`Twitter tweets rate limit status: ${tweetRateLimitStatus.currentTokens.toFixed(2)}/${tweetRateLimitStatus.maxTokens} tokens available. Used ${tweetRateLimitStatus.requestsThisInterval} this interval.`);
+        
+        // Post the tweet
+        console.log(`Posting startup tweet: "${startupMessage}"`);
+        const result = await postTweetFunction.executable(
+            { tweet_content: startupMessage }, 
+            (msg) => console.log(`[Startup Tweet] ${msg}`)
+        );
+        
+        // Log the complete result for debugging
+        console.log("Tweet result:", result);
+        
+        // Handle the response based on status
+        if (result.status === ExecutableGameFunctionStatus.Done) {
+            console.log(`✅ Startup tweet posted successfully!`);
+            return result;
+        } else {
+            console.error(`❌ Failed to post startup tweet`);
+            return null;
+        }
+    } catch (error) {
+        console.error("Error posting startup tweet:", error instanceof Error ? error.message : 'Unknown error');
+        return null;
+    }
+}
+
 // Initialize and schedule tweets
 async function initializeAndScheduleTweets() {
     try {
         console.log("🐦 Initializing tweet functionality...");
         
-        // Post an initial tweet at startup
+        // Post a direct startup tweet 
+        await postStartupTweet();
+        
+        // Post an initial tweet with the normal agent flow (keep this as a backup)
         const initialTweetStep = await activity_agent.step({ verbose: true });
         console.log(`Initial tweet step: ${initialTweetStep}`);
         
