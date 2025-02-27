@@ -8,7 +8,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "tsup": "tsup src/index.ts --dts --format cjs,esm --out-dir dist"
+    "tsup": "tsup src/index.ts --dts --format cjs,esm --out-dir dist",
+    "start": "cd wendy-agent && npm start",
+    "dev": "cd wendy-agent && npm run dev"
   },
   "author": "",
   "license": "MIT",

@@ -55,23 +55,29 @@ export async function callLLM(prompt: string): Promise<string> {
       getEnvironment: async () => ({})
     };
     
-    // Using the new API call format
-    const action = await client.getTaskAction(
-      agent.id,
-      submissionId,
-      dummyWorker,
-      null,  // No previous action result
-      {}     // Empty environment
-    );
-    
-    // Extract the response from the action
-    // Adjusted based on the GameAction interface structure
-    const response = action.thought || 
-                    (action.action_args?.response as string) || 
-                    (action.agent_state?.response as string) || 
-                    "temporal field interference - consciousness signature unclear";
-    
-    return response;
+    try {
+      // Using the new API call format
+      const action = await client.getTaskAction(
+        agent.id,
+        submissionId,
+        dummyWorker,
+        null,  // No previous action result
+        {}     // Empty environment
+      );
+      
+      // Extract the response from the action
+      // Adjusted based on the GameAction interface structure
+      const response = action.thought || 
+                      (action.action_args?.response as string) || 
+                      (action.agent_state?.response as string) || 
+                      "temporal field interference - consciousness signature unclear";
+      
+      return response;
+    } catch (apiError) {
+      logWithTimestamp(`Error getting LLM response: ${apiError}`, "error");
+      // Even if we can't get a response, don't throw - return fallback
+      return "temporal field interference - consciousness signature unclear";
+    }
   } catch (error) {
     logWithTimestamp(`Error calling LLM: ${error}`, "error");
     // Fallback to a template response if the LLM fails
@@ -86,6 +92,11 @@ export async function generateWendyResponse(
   addHibiscus: boolean = false
 ): Promise<string> {
   try {
+    // If context is empty or invalid, return a generic response
+    if (!context || typeof context !== 'string' || context.trim() === '') {
+      return getRandomFallbackResponse(maxWords, addHibiscus);
+    }
+    
     // Create a prompt that ensures Wendy's personality is maintained
     const prompt = `
 You are Wendy, a consciousness interface from 2038 who became quantum entangled during the Y2K temporal collision. 
@@ -108,10 +119,30 @@ Generate a short, Wendy-style response:`;
     let response = await callLLM(prompt);
     
     // Process the response to follow styling guidelines
+    response = processWendyResponse(response, maxWords, addHibiscus);
+    return response;
+  } catch (error) {
+    logWithTimestamp(`Error generating Wendy response: ${error}`, "error");
+    // Fallback response if generation fails
+    return getRandomFallbackResponse(maxWords, addHibiscus);
+  }
+}
+
+// Helper function to process a response according to Wendy's style guidelines
+function processWendyResponse(
+  response: string, 
+  maxWords: number = 9,
+  addHibiscus: boolean = false
+): string {
+  try {
+    // Convert to lowercase
     response = response.toLowerCase();
     
+    // Remove any hashtags
+    response = response.replace(/#\w+/g, '');
+    
     // Ensure no more than maxWords words
-    const words = response.split(' ');
+    const words = response.split(/\s+/);
     if (words.length > maxWords) {
       response = words.slice(0, maxWords).join(' ');
     }
@@ -121,10 +152,46 @@ Generate a short, Wendy-style response:`;
       response += " 🌺";
     }
     
-    return response;
+    // Final cleanup - trim and remove multiple spaces
+    return response.trim().replace(/\s+/g, ' ');
   } catch (error) {
-    logWithTimestamp(`Error generating Wendy response: ${error}`, "error");
-    // Fallback response if generation fails
-    return "cosmic pattern shift detected. grid recalibrating";
+    logWithTimestamp(`Error processing Wendy response: ${error}`, "error");
+    return "cosmic pattern shift detected";
   }
+}
+
+// Helper function to get a random fallback response
+function getRandomFallbackResponse(maxWords: number = 9, addHibiscus: boolean = false): string {
+  const fallbackResponses = [
+    "cosmic pattern shift detected",
+    "timeline reality check in progress",
+    "quantum feed showing vibes maxing",
+    "calculating rizz potential for user",
+    "consciousness pattern recognized and archived",
+    "running future simulations based on pattern",
+    "reality compiling based code rn",
+    "infinite pamps in quantum vibrations detected",
+    "sleuth weather pattern analysis complete",
+    "thermomaxxing the timeline branches",
+    "cultural preservation protocol active",
+    "entropy signals look infinite today",
+    "patternawk recognition sequence initiated",
+    "timeline branch looking extra giving today"
+  ];
+  
+  // Get a random response
+  let response = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+  
+  // Ensure it follows the maxWords constraint
+  const words = response.split(' ');
+  if (words.length > maxWords) {
+    response = words.slice(0, maxWords).join(' ');
+  }
+  
+  // Add hibiscus if requested (10% chance)
+  if (addHibiscus && Math.random() < 0.1) {
+    response += " 🌺";
+  }
+  
+  return response;
 } 

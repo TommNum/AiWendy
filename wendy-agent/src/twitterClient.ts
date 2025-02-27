@@ -22,24 +22,27 @@ export const roClient = twitterClient.readOnly;
 // Create a bearer token client for app-only auth if bearer token is available
 export const appOnlyClient = process.env.TWITTER_BEARER_TOKEN 
   ? new TwitterApi(process.env.TWITTER_BEARER_TOKEN)
-  : process.env.BEARER_TOKEN
-    ? new TwitterApi(process.env.BEARER_TOKEN)
-    : null;
+  : null;
 
 // Custom reply function to extend the Twitter API functionality
 export async function replyToTweet(text: string, reply_to_tweet_id: string, mediaId: string | null = null) {
-  const params: any = {
-    text,
-    reply: {
-      in_reply_to_tweet_id: reply_to_tweet_id
+  try {
+    const params: any = {
+      text,
+      reply: {
+        in_reply_to_tweet_id: reply_to_tweet_id
+      }
+    };
+    
+    if (mediaId) {
+      params.media = { media_ids: [mediaId] };
     }
-  };
-  
-  if (mediaId) {
-    params.media = { media_ids: [mediaId] };
+    
+    return await rwClient.v2.tweet(params);
+  } catch (error: any) {
+    logWithTimestamp(`Error replying to tweet: ${error.message}`, 'error');
+    throw error;
   }
-  
-  return rwClient.v2.tweet(params);
 }
 
 // Custom DM list function to extend the Twitter API functionality
@@ -111,7 +114,7 @@ export async function getDmConversation(participantId: string, options: any = {}
   }
 }
 
-// Helper function to process search results
+// Helper function for searching tweets
 export async function searchTweets(searchQuery: string, options: any = {}) {
   try {
     // Try with user context auth first
@@ -147,16 +150,21 @@ export async function searchTweets(searchQuery: string, options: any = {}) {
 
 // Helper function to process mentions
 export async function getUserMentions(userId: string, options: any = {}) {
-  const result = await roClient.v2.userMentionTimeline(userId, {
-    ...options,
-    "tweet.fields": "created_at,author_id,public_metrics",
-    "user.fields": "username,name,profile_image_url",
-    "expansions": "author_id"
-  });
-  return {
-    ...result,
-    data: Array.isArray(result.data) ? result.data : []
-  };
+  try {
+    const result = await roClient.v2.userMentionTimeline(userId, {
+      ...options,
+      "tweet.fields": "created_at,author_id,public_metrics",
+      "user.fields": "username,name,profile_image_url",
+      "expansions": "author_id"
+    });
+    return {
+      ...result,
+      data: Array.isArray(result.data) ? result.data : []
+    };
+  } catch (error) {
+    logWithTimestamp(`Error getting user mentions: ${error}`, 'error');
+    throw error;
+  }
 }
 
 // Validate Twitter credentials on startup
@@ -166,46 +174,33 @@ export async function validateTwitterCredentials(): Promise<boolean> {
     
     try {
       // Try user context auth
-      const user = await rwClient.v2.me().catch(error => {
-        if (error.code !== 429) {
-          throw error;
-        }
-        console.log('Twitter rate limited (429). This is expected if you\'ve been running the app frequently.');
-        // Don't throw for rate limits - we'll try app-only auth
-      });
-      
-      if (user) {
-        console.log(`Twitter auth successful. Logged in as @${user.data.username}`);
-      }
+      const user = await rwClient.v2.me();
+      console.log(`Twitter auth successful. Logged in as @${user.data.username}`);
+      return true;
     } catch (error: any) {
-      if (error.code !== 429) {
-        console.error('Twitter authentication error:', error);
-        // Only throw if it's not a rate limit error
+      // Check for rate limiting
+      if (error.code === 429) {
+        console.log('Twitter rate limited (429). This is expected if you\'ve been running the app frequently.');
+        // If rate limited, fall back to app-only auth
+      } else {
+        console.error('Twitter user context authentication error:', error);
+        // Fall back to app-only auth
       }
     }
     
-    // Check if app-only auth is available
+    // Try app-only auth if available
     if (appOnlyClient) {
       try {
-        // For app-only auth validation, we'll use a different endpoint
-        // The search endpoint is more reliable for validation
-        const searchResult = await appOnlyClient.v2.search('twitter', {
-          max_results: 10
-        }).catch(error => {
-          if (error.code !== 429) {
-            throw error;
-          }
-          console.log('App-only auth rate limited (429). This is expected if you\'ve been running the app frequently.');
-          // Don't throw for rate limits
-        });
-        
-        if (searchResult) {
-          console.log('Bearer token authentication successful');
-          return true;
-        }
+        // For app-only auth validation, use a simple endpoint
+        const searchResult = await appOnlyClient.v2.search('twitter', { max_results: 10 });
+        console.log('Bearer token authentication successful');
+        return true;
       } catch (error: any) {
-        console.error('Twitter app-only authentication error:', error);
-        // Continue even if app-only auth fails
+        if (error.code === 429) {
+          console.log('App-only auth rate limited (429). This is expected if you\'ve been running the app frequently.');
+        } else {
+          console.error('Twitter app-only authentication error:', error);
+        }
       }
     }
     
@@ -213,8 +208,7 @@ export async function validateTwitterCredentials(): Promise<boolean> {
     return true;
   } catch (error: any) {
     console.error('Twitter authentication error:', error);
-    // If we've reached this point, we'll continue anyway since we're handling rate limits
-    console.log('Continuing despite authentication issues due to rate limiting');
+    // Continue despite auth issues so the app doesn't crash
     return true;
   }
 }

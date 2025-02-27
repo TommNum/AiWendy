@@ -28,19 +28,42 @@ const postTweetFunction = new GameFunction({
         );
       }
       
-      // Generate and post the tweet
+      // Generate the tweet content
       const tweet = await generateTweet();
       logger(`Posting tweet: ${tweet}`);
       
-      await rwClient.v2.tweet({ text: tweet });
-      
-      // Record the tweet
-      rateLimiter.recordTweet();
-      
-      return new ExecutableGameFunctionResponse(
-        ExecutableGameFunctionStatus.Done,
-        `Successfully posted tweet: "${tweet}"`
-      );
+      try {
+        // Post the tweet with proper error handling
+        await rwClient.v2.tweet({ text: tweet });
+        
+        // Record the tweet in rate limiter
+        rateLimiter.recordTweet();
+        
+        return new ExecutableGameFunctionResponse(
+          ExecutableGameFunctionStatus.Done,
+          `Successfully posted tweet: "${tweet}"`
+        );
+      } catch (tweetError: any) {
+        // Handle specific error cases
+        if (tweetError.code === 403) {
+          logger(`Tweet posting failed with 403 error: ${tweetError.message}`);
+          // Might be a duplicate tweet or content policy issue
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Failed,
+            `Failed to post tweet due to a 403 error. This could be a duplicate tweet or content policy issue.`
+          );
+        } else if (tweetError.code === 429) {
+          logger(`Twitter rate limited (429): ${tweetError.message}`);
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Failed,
+            `Rate limited by Twitter API. Please try again later.`
+          );
+        } else {
+          // Log detailed error information
+          logger(`Tweet posting error: ${tweetError.code} - ${tweetError.message}`);
+          throw tweetError; // Re-throw for the outer catch
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger(`Tweet posting failed: ${errorMessage}`);
