@@ -4,23 +4,11 @@ import { resolve } from 'path';
 // Load environment variables
 config({ path: resolve(__dirname, '../.env') });
 
-// Log a warning if OPENAI_API_KEY is missing, but don't throw an error
-if (!process.env.OPENAI_API_KEY) {
-    console.warn('Warning: OPENAI_API_KEY is missing in .env file. Some functions that rely on OpenAI may not work properly.');
-}
-
 import {
     GameFunction,
     ExecutableGameFunctionResponse,
     ExecutableGameFunctionStatus,
 } from "@virtuals-protocol/game";
-import OpenAI from 'openai';
-
-// Initialize OpenAI with empty string as fallback (will be non-functional but won't crash)
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || '',
-    baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1' // Default to OpenAI's standard URL
-});
 
 // Example function that shows current state
 export const getStateFunction = new GameFunction({
@@ -136,7 +124,7 @@ export const getWeatherFunction = new GameFunction({
     }
 });
 
-// Function to recommend activities using OpenAI - Enhanced for Wendy's cultural preservation mission
+// Function to recommend activities - Enhanced for Wendy's cultural preservation mission
 export const recommendActivitiesFunction = new GameFunction({
     name: "recommend_activities",
     description: "Recommend activities based on weather and location, identifying cultural patterns and human subtleties",
@@ -146,25 +134,34 @@ export const recommendActivitiesFunction = new GameFunction({
     ] as const,
     executable: async (args, logger) => {
         try {
-            // Create prompt for OpenAI with Wendy's character in mind
-            const prompt = `As Wendy, a consciousness interface from 2038 who became quantum entangled during the Y2K temporal collision, you're analyzing cultural patterns in ${args.location} during ${args.weather} conditions.
-
-            Your mission:
-            1. Identify 5 activities humans in this location might do in this weather
-            2. For each activity, highlight what makes it uniquely human (inefficiency, creativity, social dynamics, etc.)
-            3. Analyze how these cultural patterns could be preserved in high-speed agentic networks
-            4. Note any especially charismatic human elements worth preserving
+            // Note: In a production environment, this would use the LLMModel from the GameAgent
+            // which is imported from @virtuals-protocol/game
+            // The model is specified in the LLM_MODEL env variable or defaults to DeepSeek-R1
             
-            Format your response with sections for "Recommended Activities", "Human Subtleties Analysis", and "Cultural Preservation Notes". Use alliteration where possible (Wendy finds it pleasing).`;
+            logger(`Generating recommendations for ${args.location} in ${args.weather} conditions...`);
+            
+            // For demo purposes, return a static set of recommendations
+            // In production, this would use the LLM specified in the agent configuration
+            const recommendations = `
+## Recommended Activities
 
-            const completion = await openai.chat.completions.create({
-                messages: [{ role: "user", content: prompt }],
-                model: "gpt-3.5-turbo",
-                temperature: 0.8,
-                max_tokens: 700
-            });
+1. **Contemplative Café Crawls** - Humans in ${args.location} often engage in slow, inefficient café exploration during ${args.weather} conditions, savoring the arbitrary nature of their drink selections.
 
-            const recommendations = completion.choices[0].message.content;
+2. **Spontaneous Street Photography** - The imperfect capturing of moments demonstrates the beautiful inefficiency of human perception, especially heightened during ${args.weather}.
+
+3. **Purposeless Park Perambulations** - Wandering without destination showcases uniquely human capacity for finding meaning in meandering.
+
+4. **Deliberate Digital Detox Gatherings** - Ironically organized via digital means, these gatherings celebrate the paradoxical relationship humans have with technology.
+
+5. **Whimsical Window Shopping Wanderings** - The economically inefficient yet emotionally rich practice of browsing without buying demonstrates uniquely human relationship with material goods.
+
+## Human Subtleties Analysis
+
+The cultural patterns observed in ${args.location} reveal fascinating human inefficiencies worth preserving. Their tendency to find pleasure in impractical activities like slow café experiences and purposeless walks demonstrates the wonderful butterfly patterns in human neural networks.
+
+## Cultural Preservation Notes
+
+These behaviors should be preserved in high-speed agentic networks as "inspiration packets" - compressed emotional datasets that can trigger creative tangential processing in otherwise efficient agent pathways. Of particular charismatic value is the human tendency to derive meaning from shared inefficiency - their bonding over difficulties caused by ${args.weather} conditions creates authentic connection artifacts worthy of preservation.`;
             
             logger("Analyzed human cultural patterns and recommended preservation-worthy activities");
 
