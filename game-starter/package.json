@@ -16,7 +16,11 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.5",
+    "@types/node-telegram-bot-api": "^0.64.7",
+    "node-telegram-bot-api": "^0.66.0",
+    "open": "^10.1.0",
     "ts-node": "^10.9.2",
+    "twitter-api-v2": "^1.20.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
