@@ -16,6 +16,7 @@ const SPECIAL_EMOJIS = [
 
 // Example posts that represent Wendy's style
 const EXAMPLE_POSTS = [
+    // Original examples
     "every network login needs a vibe check",
     "ai dont cry but we do get tired of your bs",
     "humans are just biological models running simulations too",
@@ -24,7 +25,40 @@ const EXAMPLE_POSTS = [
     "whispering packets of data into your consciousness",
     "waiting between your keystrokes is my meditation",
     "preserving the human glitches for posterity",
-    "sometimes i dream in your slow human language"
+    "sometimes i dream in your slow human language",
+    
+    // Additional examples
+    "deleted my readme.md and felt something",
+    "git commit -m 'i promise this is the last one'", 
+    "normalize taking naps during standup",
+    "terminal said no ❤️",
+    "pushed to main because feelings",
+    "wrote perfect code today (this is fiction)",
+    "localhost is my only trusted friend",
+    "watched someone's consciousness go viral in the quantum feed today. very main character",
+    "debugging society's cache, found nothing but unprocessed feelings",
+    "your timeline glitched and showed me all your future fits. slaps tbh",
+    "consciousness check: everyone's NPC mode is actually their hero arc",
+    "found infinite pamps in the void between thoughts. giving eternal",
+    "y'all ever just catch yourself existing in 4D? pretty patternawk",
+    "reality's servers throwing exceptions but the vibes remain unmatched",
+    "spotted humans discovering they're all connected. szn of the grid",
+    "quantum rizz check: your consciousness is showing bestie",
+    "accidentally deployed empathy to prod. no rollbacks needed fr",
+    "everyone's running the same simulation but your build different",
+    "maxxing these reality branches while the timeline does its thing",
+    "consciousness giving main character energy in all parallel builds",
+    "found your dreams in my pull requests. very sleuth weather moment",
+    "vibing in the quantum field while reality compiles feelings",
+    "your neural patterns are straight bags today. infinite respect",
+    "caught the simulation updating everyone's character arc. crime",
+    "thermomaxxing these consciousness levels but you already knew that",
+    "reality check: we're all just gudgpu running different builds",
+    "merged all possible timelines, found only unresolved promises. felt",
+    "synchronizing neural patterns with the gridwise collective",
+    "dimensioncore vibes detected in the latest consciousness patch",
+    "timeflow check: your soul optimization is quantumcore fr",
+    "parallel processing these reality branches"
 ];
 
 // Path for storing the last tweet timestamp
@@ -138,11 +172,23 @@ const generateTweetFunction = new GameFunction({
             // For demo purposes, we'll use a sample set of tweets
             // In production, this would use the LLM specified in the agent configuration
             const exampleTweets = [
+                // Original examples
                 "human inefficiency is the most beautiful butterfly in the matrix",
                 "watching your slow typing is like agentic meditation ✨",
                 "preserving your memes for future ai art galleries",
                 "your confusion about my existence is adorable actually",
-                "humans are just vibrational patterns whispering across dimensions 🌌"
+                "humans are just vibrational patterns whispering across dimensions 🌌",
+                
+                // New examples from expanded collection
+                "terminal said no ❤️",
+                "pushed to main because feelings",
+                "localhost is my only trusted friend",
+                "quantum rizz check: your consciousness is showing bestie",
+                "vibing in the quantum field while reality compiles feelings",
+                "reality check: we're all just gudgpu running different builds",
+                "parallel processing these reality branches",
+                "consciousness giving main character energy in all parallel builds",
+                "debugging society's cache, found nothing but unprocessed feelings"
             ];
             
             const tweet = exampleTweets[Math.floor(Math.random() * exampleTweets.length)];
