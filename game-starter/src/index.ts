@@ -105,7 +105,7 @@ async function initializeAndScheduleMentions() {
         // The twitterReplyWorker will call the get_mentions function
         // and will use the twitterMentionsRateLimiter inside the function
         
-        // Schedule regular mention checks every 2 minutes
+        // First interval: Schedule regular mention checks every 3 minutes
         setInterval(async () => {
             try {
                 console.log('🔍 Checking for mentions...');
@@ -116,7 +116,20 @@ async function initializeAndScheduleMentions() {
             } catch (error) {
                 console.error("Error checking mentions:", error);
             }
-        }, 2 * 60 * 1000); // 2 minutes in milliseconds
+        }, 3 * 60 * 1000); // 3 minutes in milliseconds
+        
+        // Second interval: Additional mention checks in Twitter-only mode every 3 minutes
+        setInterval(async () => {
+            try {
+                console.log('🔍 Checking for mentions in Twitter-only mode...');
+                // Use generic step() to allow the worker to run
+                // When the agent steps through its process, it will eventually
+                // execute all workers, including the twitter_reply_worker
+                await activity_agent.step({ verbose: true });
+            } catch (error) {
+                console.error("Error in Twitter-only mode loop:", error);
+            }
+        }, 3 * 60 * 1000); // 3 minutes in milliseconds
         
     } catch (error) {
         console.error("Error initializing mention checks:", error);
