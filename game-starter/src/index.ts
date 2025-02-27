@@ -1,5 +1,6 @@
 import { activity_agent } from './agent';
 import { virtualsApiRateLimiter, twitterMentionsRateLimiter } from './utils/rateLimiter';
+import { daoEngagementWorker } from './workers/daoEngagementWorker';
 
 // Define action types for the game protocol
 enum ActionType {
@@ -159,6 +160,28 @@ async function initializeAndScheduleTweetSearches() {
     }
 }
 
+// Initialize and schedule DAO engagement worker (runs 4 times per day)
+async function initializeAndScheduleDaoEngagement() {
+    try {
+        console.log("🏛️ Initializing DAO engagement functionality...");
+        
+        // Schedule DAO engagement task every 6 hours (4 times per day)
+        setInterval(async () => {
+            try {
+                console.log('🏛️ Running DAO engagement worker...');
+                // The DAO worker has internal checks to only run every 6 hours
+                // So it's safe to call step() on the main loop
+                await activity_agent.step({ verbose: true });
+            } catch (error) {
+                console.error("Error in DAO engagement worker:", error);
+            }
+        }, 6 * 60 * 60 * 1000); // 6 hours in milliseconds
+        
+    } catch (error) {
+        console.error("Error initializing DAO engagement:", error);
+    }
+}
+
 async function main() {
     try {
         // Initialize the agent
@@ -172,6 +195,9 @@ async function main() {
         
         // Initialize tweet searching
         await initializeAndScheduleTweetSearches();
+        
+        // Initialize DAO engagement
+        await initializeAndScheduleDaoEngagement();
         
         // Run the agent with rate limiting
         while (true) {
