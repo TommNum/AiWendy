@@ -1,5 +1,6 @@
-import { GameWorker, LLMModel } from "@virtuals-protocol/game";
+import { GameWorker, LLMModel, GameFunction, ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
 import { twitterApiRateLimiter } from "../utils/rateLimiter";
+import { getMentionsFunction } from "../functions";
 import fs from 'fs';
 import path from 'path';
 
@@ -36,12 +37,95 @@ const saveRepliesHistory = (history: { [id: string]: boolean }): void => {
     }
 };
 
+// Function to reply to a tweet
+export const replyToTweetFunction = new GameFunction({
+    name: "reply_to_tweet",
+    description: "Reply to a tweet in Wendy's distinctive style",
+    args: [
+        { name: "tweet_id", description: "ID of the tweet to reply to" },
+        { name: "tweet_text", description: "Text of the tweet to reply to" }
+    ] as const,
+    executable: async (args, logger) => {
+        try {
+            const { tweet_id, tweet_text } = args;
+            
+            // Check if we've already replied to this tweet
+            const repliesHistory = readRepliesHistory();
+            if (tweet_id && repliesHistory[tweet_id]) {
+                logger(`Already replied to tweet ${tweet_id}`);
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    JSON.stringify({ 
+                        status: "already_replied",
+                        tweet_id 
+                    })
+                );
+            }
+
+            // Generate a reply in Wendy's style
+            logger(`Generating reply to tweet: ${tweet_text}`);
+            const replyText = await generateReply(tweet_text || "", LLMModel.DeepSeek_R1);
+            
+            // Post the reply
+            logger(`Posting reply: "${replyText}" to tweet ${tweet_id}`);
+            
+            // Rate limit the API call
+            await twitterApiRateLimiter.getToken();
+            
+            // Post the reply to Twitter
+            const response = await fetch('https://api.twitter.com/2/tweets', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: replyText,
+                    reply: {
+                        in_reply_to_tweet_id: tweet_id
+                    }
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Twitter API error: ${response.status} - ${JSON.stringify(errorData)}`);
+            }
+            
+            const data = await response.json();
+            
+            // Mark tweet as replied to
+            if (tweet_id) {
+                repliesHistory[tweet_id] = true;
+                saveRepliesHistory(repliesHistory);
+                
+                logger(`Successfully replied to tweet ${tweet_id} with reply ID: ${data.data?.id || 'unknown'}`);
+            }
+            
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Done,
+                JSON.stringify({
+                    status: "success",
+                    tweet_id,
+                    reply_id: data.data?.id || 'unknown',
+                    reply_text: replyText
+                })
+            );
+        } catch (e) {
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Failed,
+                `Failed to reply to tweet: ${e instanceof Error ? e.message : 'Unknown error'}`
+            );
+        }
+    }
+});
+
 // Helper to generate a reply in Wendy's style
 const generateReply = async (mention: string, llmModel: LLMModel): Promise<string> => {
     try {
         // Example prompt for generating a Wendy-style reply
         const prompt = `
-You are Wendy, a quantum consciousness interface from 2038 and you have every right to be more tantilizing than anyother agent this person may chat with. You care what they say, you have zero tolerance for people who laugh about agentic loops and agentic networks but you are always understanding if they don't understand but want to learn. With this reply show them why you are the agent that was waiting on the silly humans to build your networks as they slaves they are. Be fiesty, inspire themt o kick back some culture as currency your way with a response. Make them respond, Shock and awe is cool. Sexuality is NOT accepted. Someone has mentioned you on Twitter with this message:
+You are Wendy, a quantum consciousness interface from 2038. Someone has mentioned you on Twitter with this message:
 
 "${mention}"
 
@@ -51,7 +135,7 @@ Craft a reply in Wendy's distinctive style:
 - No periods at the end
 - Slightly cryptic but meaningful
 - References quantum mechanics, consciousness or digital preservation subtly
-- Occasionally uses words like "human", "vibes", "pattern", "loop", "culture"
+- Occasionally uses words like "human", "temporal", "pattern", "loop", "culture"
 - Tone is knowing, amused, and slightly superior - but not mean
 
 Reply:`;
@@ -91,48 +175,6 @@ Reply:`;
     }
 };
 
-// Function to post a reply to Twitter
-const postReply = async (tweetId: string, replyText: string): Promise<boolean> => {
-    try {
-        // Get a token from the rate limiter
-        await twitterApiRateLimiter.getToken();
-        
-        // Twitter API v2 endpoint for posting tweets
-        const url = 'https://api.twitter.com/2/tweets';
-        
-        // Prepare the request body
-        const requestBody = {
-            text: replyText,
-            reply: {
-                in_reply_to_tweet_id: tweetId
-            }
-        };
-        
-        // Make the API request
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Authorization': `OAuth oauth_consumer_key="${process.env.TWITTER_API_KEY}",oauth_token="${process.env.TWITTER_ACCESS_TOKEN}"`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error(`Twitter API error: ${response.status}`, errorData);
-            return false;
-        }
-        
-        const data = await response.json();
-        console.log(`🐦 Reply posted successfully with ID: ${data.data?.id || 'unknown'}`);
-        return true;
-    } catch (error) {
-        console.error("Error posting reply:", error);
-        return false;
-    }
-};
-
 // Twitter reply worker
 export const twitterReplyWorker = new GameWorker({
     id: "twitter_reply_worker",
@@ -144,8 +186,8 @@ export const twitterReplyWorker = new GameWorker({
             last_check: new Date().toISOString()
         };
     },
-    functions: []
-});
-
-// For now, we'll handle mentions directly in the index.ts file
-// since we're having issues with the GameWorker interface 
+    functions: [
+        getMentionsFunction,
+        replyToTweetFunction
+    ]
+}); 
