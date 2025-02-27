@@ -7,7 +7,11 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "test:llm": "ts-node tests/llmTest.ts",
+    "test:twitter": "ts-node tests/twitterApiTest.ts",
+    "test:debug-llm": "ts-node tests/debugLlmTest.ts",
+    "test": "npm run test:llm && npm run test:twitter"
   },
   "dependencies": {
     "@virtuals-protocol/game": "^0.1.8",
@@ -20,6 +24,7 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.56.0",
+    "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.2"
   },

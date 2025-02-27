@@ -5,6 +5,10 @@ import GameClient from "./gameClient";
 // Create a singleton instance of the GameClient
 let gameClient: GameClient | null = null;
 
+// Define backoff parameters
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 2000; // 2 seconds
+
 // Initialize the GameClient with the API key
 export function initializeGameClient() {
   if (!gameClient) {
@@ -43,8 +47,8 @@ export class ContentGenerationError extends Error {
   }
 }
 
-// Function to call the LLM through the Game framework
-export async function callLLM(prompt: string): Promise<string> {
+// Function to call the LLM through the Game framework with retry logic
+export async function callLLM(prompt: string, retryCount = 0): Promise<string> {
   try {
     const client = getGameClient();
     await client.init(); // Make sure the client is initialized
@@ -62,12 +66,35 @@ export async function callLLM(prompt: string): Promise<string> {
     // Wait a short time for the task to complete
     await new Promise(resolve => setTimeout(resolve, 2000));
     
+    // Define a dummy response function to satisfy Game Protocol requirements
+    const responseFunction = {
+      name: "respond",
+      description: "Respond to the user's prompt",
+      parameters: {
+        type: "object",
+        properties: {
+          response: {
+            type: "string",
+            description: "The response to the user's prompt"
+          }
+        },
+        required: ["response"]
+      },
+      toJSON: function() {
+        return {
+          name: this.name,
+          description: this.description,
+          parameters: this.parameters
+        };
+      }
+    };
+    
     // Use a dummy worker to get the task action which should contain the response
     const dummyWorker = {
       id: "dummy_worker",
       name: "Dummy Worker",
       description: "A temporary worker to get LLM responses",
-      functions: [],
+      functions: [responseFunction], // Include the function in the worker
       getEnvironment: async () => ({})
     };
     
@@ -81,9 +108,22 @@ export async function callLLM(prompt: string): Promise<string> {
     );
     
     // Extract the response from the action
-    const response = action.thought || 
-                    (action.action_args?.response as string) || 
-                    (action.agent_state?.response as string);
+    let response = "";
+    
+    // Check for response in different places 
+    if (action.action_args?.response) {
+      response = action.action_args.response as string;
+    } else if (action.thought) {
+      response = action.thought;
+    } else if (action.agent_state?.response) {
+      response = action.agent_state.response as string;
+    } else if (typeof action.action_args === 'string') {
+      // Sometimes the action_args might be a direct string
+      response = action.action_args;
+    } else {
+      // Fallback: stringify the entire action
+      response = JSON.stringify(action);
+    }
     
     if (!response || response.trim() === '') {
       throw new ContentGenerationError("Empty response from LLM");
@@ -96,8 +136,45 @@ export async function callLLM(prompt: string): Promise<string> {
         error?.code === 429 || 
         error?.message?.includes('429') || 
         error?.message?.toLowerCase().includes('rate limit')) {
+      
+      // Log rate limit error
       logWithTimestamp(`LLM rate limited: ${error.message}`, "error");
+      
+      // Implement retry logic with exponential backoff
+      if (retryCount < MAX_RETRIES) {
+        const retryDelay = INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+        logWithTimestamp(`Retrying LLM call after ${retryDelay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`, "info");
+        
+        // Wait for calculated backoff period
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        
+        // Retry with incremented retry count
+        return callLLM(prompt, retryCount + 1);
+      }
+      
+      // If max retries exceeded, throw rate limit error
       throw new RateLimitError("LLM service is rate limited. Please try again later.");
+    }
+    
+    // Enhance 400 error logging with more details
+    if (error?.response?.status === 400) {
+      const errorData = error.response?.data || "No response data";
+      logWithTimestamp(`LLM 400 Error: ${error.message}`, "error");
+      logWithTimestamp(`Error details: ${JSON.stringify(errorData)}`, "error");
+      logWithTimestamp(`Request URL: ${error.config?.url || "unknown"}`, "error");
+      logWithTimestamp(`Request Method: ${error.config?.method || "unknown"}`, "error");
+      
+      // Log a simplified version of the request data (remove sensitive info)
+      try {
+        const requestData = error.config?.data ? JSON.parse(error.config.data) : "No request data";
+        // Don't log the full prompt to avoid cluttering logs
+        if (requestData.data && requestData.data.task) {
+          requestData.data.task = `${requestData.data.task.substring(0, 50)}... (truncated)`;
+        }
+        logWithTimestamp(`Request Data: ${JSON.stringify(requestData)}`, "error");
+      } catch (e) {
+        logWithTimestamp(`Could not parse request data: ${error.config?.data}`, "error");
+      }
     }
     
     // Log the error but throw a specific error

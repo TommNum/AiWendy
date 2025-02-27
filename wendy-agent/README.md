@@ -19,6 +19,36 @@ All interactions follow Wendy's unique personality and stylistic guidelines.
 - Twitter API credentials with read, write, and DM scopes
 - G.A.M.E Framework API key
 
+## Rate Limiting Considerations
+
+### GAME API Rate Limits
+
+The GAME API has specific rate limits that need to be considered:
+
+1. **Main Worker Rate Limit**: The GAME Protocol allows 29 calls per 5 minutes for the main worker
+2. **Worker Intervals**: The application uses configurable intervals optimized for these rate limits
+3. **Backoff Strategy**: Built-in exponential backoff for rate-limited requests
+
+### Worker Interval Configuration
+
+You can customize worker intervals through environment variables:
+
+```
+# Worker Interval Settings (in seconds)
+MAIN_WORKER_INTERVAL_SECONDS=12   # Default: 12 seconds (allows ~5 calls/minute)
+DM_SCAN_INTERVAL_SECONDS=300      # Default: 5 minutes
+DM_RESPOND_INTERVAL_SECONDS=60    # Default: 1 minute
+```
+
+### Troubleshooting Rate Limit Errors
+
+If you're still encountering rate limit (429) errors:
+
+1. Check if you're running multiple instances that share the same API key
+2. Slightly increase the interval values in your `.env` file
+3. Check the application logs for specific rate limit information
+4. Add random jitter to intervals if running multiple instances
+
 ## Twitter Integration
 
 This application uses the Twitter API directly through the twitter-api-v2 library. You'll need to:
@@ -100,8 +130,13 @@ TWITTER_ACCESS_SECRET=your_twitter_access_secret
 TWITTER_BEARER_TOKEN=your_twitter_bearer_token
 TWITTER_HANDLE=your_twitter_handle
 GAME_API_KEY=your_game_api_key
+
+# Worker Interval Settings (in seconds)
+MAIN_WORKER_INTERVAL_SECONDS=12   # Default: 12 seconds (allows ~5 calls/minute)
+DM_SCAN_INTERVAL_SECONDS=300      # Default: 5 minutes
+DM_RESPOND_INTERVAL_SECONDS=60    # Default: 1 minute
 ```
 
 ## Monitoring
 
-The application creates logs in the `logs` directory. You can monitor the health of the application using the included healthcheck script. 
+The application creates logs in the `logs` directory. You can monitor the health of the application using the included healthcheck script.

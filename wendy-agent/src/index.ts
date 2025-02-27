@@ -117,6 +117,16 @@ const logToFile = (message: string) => {
   fs.appendFileSync(logFile, `${new Date().toISOString()} - ${message}\n`);
 };
 
+// Configure interval settings with environment variables and optimized defaults based on rate limits
+// GAME Protocol allows 29 calls per 5 minutes for the main worker
+const MAIN_WORKER_INTERVAL_SECONDS = parseInt(process.env.MAIN_WORKER_INTERVAL_SECONDS || '12', 10); // Default 12 seconds (allows ~5 calls/minute)
+const DM_SCAN_INTERVAL_SECONDS = parseInt(process.env.DM_SCAN_INTERVAL_SECONDS || '300', 10); // Default 5 minutes
+const DM_RESPOND_INTERVAL_SECONDS = parseInt(process.env.DM_RESPOND_INTERVAL_SECONDS || '60', 10); // Default 1 minute
+
+// Log the configured intervals
+logWithTimestamp(`Using intervals: Main=${MAIN_WORKER_INTERVAL_SECONDS}s, DM Scan=${DM_SCAN_INTERVAL_SECONDS}s, DM Respond=${DM_RESPOND_INTERVAL_SECONDS}s`, "info");
+logWithTimestamp(`Based on GAME Protocol rate limits: 29 calls per 5 minutes for main worker`, "info");
+
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
 
@@ -194,28 +204,31 @@ async function main() {
     }
     
     console.log("Wendy is now running...");
+    console.log(`Main worker interval: ${MAIN_WORKER_INTERVAL_SECONDS} seconds`);
+    console.log(`DM scan interval: ${DM_SCAN_INTERVAL_SECONDS} seconds`);
+    console.log(`DM respond interval: ${DM_RESPOND_INTERVAL_SECONDS} seconds`);
     
     // Set up specific intervals for DM worker functions
     setInterval(async () => {
       try {
-        // Scan for new DMs every 5 minutes
+        // Scan for new DMs
         await wendyAgent.executeWorkerFunction(dmManagerWorker, "scan_dms");
       } catch (error) {
         console.error("Error scanning DMs:", error);
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, DM_SCAN_INTERVAL_SECONDS * 1000);
     
     setInterval(async () => {
       try {
-        // Process active DM conversations every minute
+        // Process active DM conversations
         await wendyAgent.executeWorkerFunction(dmManagerWorker, "respond_to_dms");
       } catch (error) {
         console.error("Error responding to DMs:", error);
       }
-    }, 60 * 1000); // 1 minute
+    }, DM_RESPOND_INTERVAL_SECONDS * 1000);
     
-    // Run the regular worker steps every 30 seconds
-    await wendyAgent.run(30, { verbose: true });
+    // Run the regular worker steps
+    await wendyAgent.run(MAIN_WORKER_INTERVAL_SECONDS, { verbose: true });
   } catch (error) {
     console.error("Error running Wendy:", error);
     logToFile(`Error running Wendy: ${error}`);
