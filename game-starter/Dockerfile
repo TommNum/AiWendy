@@ -42,9 +42,15 @@ RUN npm install --no-frozen-lockfile
 # Install TypeScript globally
 RUN npm install -g typescript
 
-# Copy only the game-starter source files
-COPY tsconfig.json ./
-COPY src/ ./src/
+# Create a temporary tsconfig that explicitly excludes plugins
+COPY tsconfig.json ./tsconfig.base.json
+RUN echo '{"extends": "./tsconfig.base.json", "exclude": ["node_modules", "plugins", "plugins/**/*"]}' > ./tsconfig.json
+
+# Copy only the src directory files that we need (explicitly avoiding plugins)
+COPY src/*.ts ./src/
+COPY src/workers ./src/workers/
+COPY src/utils ./src/utils/
+COPY src/types ./src/types/
 COPY .env* ./
 
 # Create data directory
