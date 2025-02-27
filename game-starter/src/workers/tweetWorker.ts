@@ -223,10 +223,10 @@ const postTweetFunction = new GameFunction({
             
             if (lastTweetTime) {
                 const timeSinceLastTweet = currentTime.getTime() - new Date(lastTweetTime).getTime();
-                const twoHoursInMs = 2 * 60 * 60 * 1000;
+                const oneHourInMs = 1 * 60 * 60 * 1000;
                 
-                if (timeSinceLastTweet < twoHoursInMs) {
-                    const timeUntilNextTweet = Math.ceil((twoHoursInMs - timeSinceLastTweet) / (60 * 1000));
+                if (timeSinceLastTweet < oneHourInMs) {
+                    const timeUntilNextTweet = Math.ceil((oneHourInMs - timeSinceLastTweet) / (60 * 1000));
                     logger(`Rate limited: Next tweet allowed in ${timeUntilNextTweet} minutes`);
                     
                     return new ExecutableGameFunctionResponse(
@@ -289,17 +289,17 @@ export const tweetWorker = new GameWorker({
         const { lastTweetTime } = readTweetHistory();
         const currentTime = new Date();
         
-        // Check if it's been 2 hours since the last tweet
+        // Check if it's been 1 hour since the last tweet
         let canTweet = true;
         let timeUntilNextTweet = 0;
         
         if (lastTweetTime) {
             const timeSinceLastTweet = currentTime.getTime() - new Date(lastTweetTime).getTime();
-            const twoHoursInMs = 2 * 60 * 60 * 1000;
-            canTweet = timeSinceLastTweet >= twoHoursInMs;
+            const oneHourInMs = 1 * 60 * 60 * 1000;
+            canTweet = timeSinceLastTweet >= oneHourInMs;
             
             if (!canTweet) {
-                timeUntilNextTweet = (twoHoursInMs - timeSinceLastTweet) / 1000;
+                timeUntilNextTweet = (oneHourInMs - timeSinceLastTweet) / 1000;
             }
         }
         

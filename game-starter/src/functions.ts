@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
-import { twitterMentionsRateLimiter, twitterApiRateLimiter } from './utils/rateLimiter';
+import { twitterMentionsRateLimiter, twitterApiRateLimiter, twitterRepliesRateLimiter, twitterLikesRateLimiter } from './utils/rateLimiter';
 import fs from 'fs';
 import path from 'path';
 
@@ -348,6 +348,9 @@ export const replyToTweetFunction = new GameFunction({
                 );
             }
 
+            // Apply replies rate limiting - 50 per hour
+            await twitterRepliesRateLimiter.getToken();
+
             // Generate a reply in Wendy's style
             logger(`Generating reply to tweet: ${tweet_text}`);
             const replyText = await generateReply(tweet_text || "", LLMModel.DeepSeek_R1);
@@ -526,7 +529,10 @@ export const likeTweetFunction = new GameFunction({
                 );
             }
             
-            // Apply rate limiting
+            // Apply likes rate limiting - 10 per 30 minutes
+            await twitterLikesRateLimiter.getToken();
+            
+            // Apply general API rate limiting
             await twitterApiRateLimiter.getToken();
             
             // Like the tweet (create "like" action)
@@ -591,6 +597,9 @@ export const shortReplyToTweetFunction = new GameFunction({
                     })
                 );
             }
+
+            // Apply replies rate limiting - 50 per hour
+            await twitterRepliesRateLimiter.getToken();
 
             // Generate a short reply in Wendy's style (under 11 words)
             logger(`Generating short reply to tweet: ${tweet_text}`);

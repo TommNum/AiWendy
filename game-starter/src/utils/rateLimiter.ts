@@ -63,4 +63,8 @@ export class RateLimiter {
 // Singleton instances for different APIs
 export const twitterApiRateLimiter = new RateLimiter(30, 5, "Twitter API");
 export const twitterMentionsRateLimiter = new RateLimiter(2, 5, "Twitter Mentions");
-export const virtualsApiRateLimiter = new RateLimiter(30, 5, "Virtuals API"); 
+export const virtualsApiRateLimiter = new RateLimiter(30, 5, "Virtuals API");
+// New rate limiter for replies - 50 per hour
+export const twitterRepliesRateLimiter = new RateLimiter(50, 60, "Twitter Replies");
+// New rate limiter for likes - 10 per 30 minutes
+export const twitterLikesRateLimiter = new RateLimiter(10, 30, "Twitter Likes"); 

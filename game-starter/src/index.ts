@@ -81,7 +81,7 @@ async function initializeAndScheduleTweets() {
         const initialTweetStep = await activity_agent.step({ verbose: true });
         console.log(`Initial tweet step: ${initialTweetStep}`);
         
-        // Schedule regular tweets every 2 hours
+        // Schedule regular tweets every 1 hour (changed from 2 hours)
         setInterval(async () => {
             try {
                 console.log('🔄 Checking if it\'s time for a new tweet...');
@@ -90,7 +90,7 @@ async function initializeAndScheduleTweets() {
             } catch (error) {
                 console.error("Error scheduling tweet:", error);
             }
-        }, 2 * 60 * 60 * 1000); // 2 hours in milliseconds
+        }, 1 * 60 * 60 * 1000); // 1 hour in milliseconds (changed from 2 hours)
         
     } catch (error) {
         console.error("Error initializing tweets:", error);
