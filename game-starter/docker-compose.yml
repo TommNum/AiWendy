@@ -6,14 +6,23 @@ services:
       dockerfile: Dockerfile
     platform: linux/amd64
     environment:
-      - API_KEY=
-      - WEATHER_API_KEY=
-      - OPENAI_API_KEY=
-      - OPENAI_BASE_URL=
-      - botToken=
+      - API_KEY=${API_KEY}
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - botToken=${botToken}
+      - TWITTER_API_KEY=${TWITTER_API_KEY}
+      - TWITTER_API_SECRET=${TWITTER_API_SECRET}
+      - TWITTER_ACCESS_TOKEN=${TWITTER_ACCESS_TOKEN}
+      - TWITTER_ACCESS_TOKEN_SECRET=${TWITTER_ACCESS_TOKEN_SECRET}
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+      - TWITTER_HANDLE=${TWITTER_HANDLE}
+      - LLM_MODEL=${LLM_MODEL}
+      - NODE_ENV=production
     volumes:
       - /var/run/tappd.sock:/var/run/tappd.sock
       - virtuals:/app
+      - ./data:/app/data
     restart: always
 
 volumes:
