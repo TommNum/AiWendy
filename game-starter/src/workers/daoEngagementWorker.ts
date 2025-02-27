@@ -9,6 +9,9 @@ import fs from 'fs';
 import path from 'path';
 import { twitterApiRateLimiter, twitterRepliesRateLimiter } from "../utils/rateLimiter";
 
+// Add debug message to verify the module is loaded
+console.log('🏛️ Initializing DAO engagement functionality...');
+
 // Path for storing the DAO worker data
 const DAO_DATA_PATH = path.join(__dirname, '../../data');
 const DAO_HISTORY_FILE = path.join(DAO_DATA_PATH, 'dao_engagement_history.json');
