@@ -11,19 +11,7 @@ RUN apt-get update && \
     curl \
     node-gyp \
     ffmpeg \
-    libtool-bin \
-    autoconf \
-    automake \
-    libopus-dev \
-    make \
-    g++ \
-    build-essential \
-    libcairo2-dev \
-    libjpeg-dev \
-    libpango1.0-dev \
-    libgif-dev \
-    openssl \
-    libssl-dev libsecret-1-dev && \
+    build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -39,25 +27,27 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install --no-frozen-lockfile
 
-# Install TypeScript globally
-RUN npm install -g typescript
+# Create a clean src directory with just what we need
+RUN mkdir -p src/utils src/workers
 
-# Create a temporary tsconfig that explicitly excludes plugins
-COPY tsconfig.json ./tsconfig.base.json
-RUN echo '{"extends": "./tsconfig.base.json", "exclude": ["node_modules", "plugins", "plugins/**/*"]}' > ./tsconfig.json
-
-# Copy only the src directory files that we need (explicitly avoiding plugins)
-COPY src/*.ts ./src/
-COPY src/workers ./src/workers/
-COPY src/utils ./src/utils/
-COPY src/types ./src/types/
+# Copy only necessary files, avoiding plugins completely
+COPY src/agent.ts src/functions.ts src/index.ts ./src/
+COPY src/utils/rateLimiter.ts ./src/utils/
+COPY src/workers/agentStateWorker.ts ./src/workers/
+COPY src/workers/tweetWorker.ts ./src/workers/
+COPY src/workers/twitterReplyWorker.ts ./src/workers/
+COPY src/workers/twitterSearchWorker.ts ./src/workers/
+COPY tsconfig.json ./
 COPY .env* ./
 
 # Create data directory
 RUN mkdir -p ./data
 
 # Build the project
-RUN npm run build && npm prune --production
+RUN npm run build
+
+# Remove dev dependencies
+RUN npm prune --production
 
 # Final runtime image
 FROM node:23.3.0-slim
