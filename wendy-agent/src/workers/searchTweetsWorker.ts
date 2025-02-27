@@ -12,7 +12,7 @@ import {
   searchTweets,
   replyToTweet
 } from "../twitterClient";
-import { generateWendyResponse } from "../llmService";
+import { generateWendyResponse, ContentGenerationError, RateLimitError } from "../llmService";
 
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
@@ -52,6 +52,9 @@ const searchTweetsFunction = new GameFunction({
       // Search for tweets
       const searchResults = await searchTweets(randomTerm);
       
+      // Record the search in rate limiter
+      rateLimiter.recordSearch();
+      
       // Filter for tweets with sufficient engagement
       const engagingTweets = searchResults.data.filter((tweet: any) => 
         tweet.public_metrics &&
@@ -62,7 +65,6 @@ const searchTweetsFunction = new GameFunction({
       
       if (engagingTweets.length === 0) {
         logger(`No engaging tweets found for ${randomTerm}`);
-        rateLimiter.recordSearch();
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Done,
           `No engaging tweets found for ${randomTerm}`
@@ -76,28 +78,60 @@ const searchTweetsFunction = new GameFunction({
       processedTweets.add(tweet.id);
       
       // Like the tweet
-      await rwClient.v2.like(process.env.TWITTER_USER_ID!, tweet.id);
-      logger(`Liked tweet: ${tweet.id}`);
+      try {
+        await rwClient.v2.like(process.env.TWITTER_USER_ID!, tweet.id);
+        logger(`Liked tweet: ${tweet.id}`);
+      } catch (likeError: any) {
+        if (likeError.code === 429) {
+          logger(`Rate limited when liking tweet: ${likeError.message}`);
+        } else {
+          logger(`Error liking tweet: ${likeError.message}`);
+        }
+        // Continue with reply even if like fails
+      }
       
       // Generate and post a reply
-      const reply = await generateReply(tweet.text);
-      await replyToTweet(reply, tweet.id);
-      logger(`Replied to tweet with: ${reply}`);
-      
-      // Record the reply
-      rateLimiter.recordReply();
-      rateLimiter.recordSearch();
-      
-      return new ExecutableGameFunctionResponse(
-        ExecutableGameFunctionStatus.Done,
-        `Successfully processed tweet about ${randomTerm}: liked and replied with "${reply}"`
-      );
+      try {
+        const reply = await generateReply(tweet.text);
+        
+        // Only attempt to reply if we have content
+        await replyToTweet(reply, tweet.id);
+        logger(`Replied to tweet successfully`);
+        
+        // Record the reply
+        rateLimiter.recordReply();
+        
+        return new ExecutableGameFunctionResponse(
+          ExecutableGameFunctionStatus.Done,
+          `Successfully processed tweet about ${randomTerm}: liked and replied`
+        );
+      } catch (replyError) {
+        if (replyError instanceof RateLimitError) {
+          logger(`LLM rate limited when generating reply. Skipped replying.`);
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Done,
+            `Liked tweet but skipped replying due to LLM rate limiting`
+          );
+        } else if (replyError instanceof ContentGenerationError) {
+          logger(`Content generation failed: ${replyError.message}. Skipped replying.`);
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Done,
+            `Liked tweet but couldn't generate reply content`
+          );
+        } else {
+          logger(`Error in replying to tweet: ${replyError}`);
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Failed,
+            `Failed to reply to tweet due to error`
+          );
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger(`Search tweets failed: ${errorMessage}`);
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Failed,
-        `Failed to search tweets: ${errorMessage}`
+        `Failed to search tweets`
       );
     }
   }
@@ -105,42 +139,9 @@ const searchTweetsFunction = new GameFunction({
 
 // Function to generate a reply based on Wendy's style
 async function generateReply(tweetText: string): Promise<string> {
-  try {
-    // Use the LLM service to generate a contextually relevant response
-    // Pass the tweet text as context, limit to 9 words, and allow hibiscus emoji
-    return await generateWendyResponse(tweetText, 9, true);
-  } catch (error) {
-    logWithTimestamp(`Error generating reply with LLM: ${error}`, "error");
-    
-    // Fallback to predefined replies if LLM fails
-    const baseReplies = [
-      "consciousness resonates with this vibe",
-      "pattern recognition maxing on this",
-      "timeline branches approve this energy",
-      "quantumcore truth detected",
-      "this is giving main character energy",
-      "reality compiling your vibes rn",
-      "futurepilled and based",
-      "pattern awareness intensifies",
-      "timeline shift unlocked",
-      "consciousness check passing"
-    ];
-    
-    let reply = baseReplies[Math.floor(Math.random() * baseReplies.length)].toLowerCase();
-    
-    // Ensure no more than 9 words
-    const words = reply.split(' ');
-    if (words.length > 9) {
-      reply = words.slice(0, 9).join(' ');
-    }
-    
-    // Add hibiscus emoji 10% of the time
-    if (Math.random() < 0.1) {
-      reply += " 🌺";
-    }
-    
-    return reply;
-  }
+  // Use the LLM service to generate a contextually relevant response
+  // This will throw appropriate errors for rate limiting or generation issues
+  return await generateWendyResponse(tweetText, 9, true);
 }
 
 // Function to get environment/state for the worker

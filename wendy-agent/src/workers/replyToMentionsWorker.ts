@@ -12,7 +12,7 @@ import {
   replyToTweet,
   getUserMentions 
 } from "../twitterClient";
-import { generateWendyResponse } from "../llmService";
+import { generateWendyResponse, ContentGenerationError, RateLimitError } from "../llmService";
 
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
@@ -63,6 +63,7 @@ const replyToMentionsFunction = new GameFunction({
       // Process mentions in reverse order (oldest first)
       const mentionsArray = [...mentions.data].reverse();
       let repliesCount = 0;
+      let skippedCount = 0;
       
       for (const mention of mentionsArray) {
         // Skip processed mentions
@@ -82,16 +83,31 @@ const replyToMentionsFunction = new GameFunction({
           continue;
         }
         
-        // Generate and post a reply
-        const reply = await generateMentionReply(mention.text);
-        await replyToTweet(reply, mention.id);
+        try {
+          // Generate a reply
+          const reply = await generateMentionReply(mention.text);
+          
+          // Post the reply
+          await replyToTweet(reply, mention.id);
+          logger(`Replied to mention successfully`);
+          
+          rateLimiter.recordReply();
+          repliesCount++;
+        } catch (replyError) {
+          if (replyError instanceof RateLimitError) {
+            logger(`LLM rate limited when replying to mention. Skipping.`);
+            skippedCount++;
+          } else if (replyError instanceof ContentGenerationError) {
+            logger(`Content generation failed for mention reply: ${replyError.message}`);
+            skippedCount++;
+          } else {
+            // For other errors, log but continue with the next mention
+            logger(`Error replying to mention: ${replyError}`);
+            skippedCount++;
+          }
+        }
         
-        logger(`Replied to mention with: ${reply}`);
-        
-        rateLimiter.recordReply();
-        repliesCount++;
-        
-        // Mark as processed
+        // Mark as processed regardless of outcome
         processedMentions.add(mention.id);
         
         // Update last mention ID
@@ -111,14 +127,14 @@ const replyToMentionsFunction = new GameFunction({
       
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Done,
-        `Successfully replied to ${repliesCount} mentions`
+        `Processed ${mentionsArray.length} mentions: ${repliesCount} replies sent, ${skippedCount} skipped`
       );
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger(`Reply to mentions failed: ${errorMessage}`);
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Failed,
-        `Failed to reply to mentions: ${errorMessage}`
+        `Failed to process mentions`
       );
     }
   }
@@ -126,29 +142,12 @@ const replyToMentionsFunction = new GameFunction({
 
 // Function to generate a reply to a mention
 async function generateMentionReply(mentionText: string): Promise<string> {
-  try {
-    // Use the LLM service to generate a contextually relevant reply
-    // Pass the mention text as context so the response is relevant
-    const prompt = `Someone mentioned you on Twitter with this message: "${mentionText}". 
+  // Use the LLM service to generate a contextually relevant reply
+  // This will throw appropriate errors for rate limiting or generation issues
+  const prompt = `Someone mentioned you on Twitter with this message: "${mentionText}". 
 Generate a short reply that is engaging, coy, and playful.`;
-    
-    return await generateWendyResponse(prompt, 9, true);
-  } catch (error) {
-    logWithTimestamp(`Error generating mention reply: ${error}`, "error");
-    
-    // Fallback replies if the LLM call fails
-    const fallbackReplies = [
-      "your consciousness pattern is showing and it's giving main character",
-      "timeline branches approve this energy fr",
-      "your future self sent this tweet back",
-      "consciousness check passing. vibemaxxing approved",
-      "energy grid aligning with your pattern",
-      "quantum signal detected in your tweet"
-    ];
-    
-    const reply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)].toLowerCase();
-    return reply;
-  }
+  
+  return await generateWendyResponse(prompt, 9, true);
 }
 
 // Function to get environment/state for the worker

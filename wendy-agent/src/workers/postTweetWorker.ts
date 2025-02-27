@@ -5,7 +5,7 @@ import {
   GameWorker 
 } from "@virtuals-protocol/game";
 import { rwClient, TwitterRateLimiter, logWithTimestamp } from "../twitterClient";
-import { generateWendyResponse } from "../llmService";
+import { generateWendyResponse, ContentGenerationError, RateLimitError } from "../llmService";
 
 // Shared rate limiter instance
 const rateLimiter = new TwitterRateLimiter();
@@ -17,51 +17,71 @@ const postTweetFunction = new GameFunction({
   args: [] as const,
   executable: async (_, logger) => {
     try {
-      // Check rate limiting
+      // Check rate limiting for Twitter
       if (!rateLimiter.canTweet()) {
         const status = rateLimiter.getRateLimitStatus();
         const waitTimeMinutes = Math.ceil(status.nextTweetAvailableIn / (60 * 1000));
-        logger(`Rate limited: Need to wait ${waitTimeMinutes} minutes before next tweet`);
+        logger(`Twitter rate limited: Need to wait ${waitTimeMinutes} minutes before next tweet`);
         return new ExecutableGameFunctionResponse(
           ExecutableGameFunctionStatus.Failed,
           `Rate limited: Next tweet possible in ${waitTimeMinutes} minutes`
         );
       }
       
-      // Generate the tweet content
-      const tweet = await generateTweet();
-      logger(`Posting tweet: ${tweet}`);
-      
       try {
-        // Post the tweet with proper error handling
-        await rwClient.v2.tweet({ text: tweet });
+        // Generate the tweet content using LLM
+        const tweet = await generateTweet();
         
-        // Record the tweet in rate limiter
-        rateLimiter.recordTweet();
+        // Only log after successful generation
+        logger(`Generated tweet content ready for posting`);
         
-        return new ExecutableGameFunctionResponse(
-          ExecutableGameFunctionStatus.Done,
-          `Successfully posted tweet: "${tweet}"`
-        );
-      } catch (tweetError: any) {
-        // Handle specific error cases
-        if (tweetError.code === 403) {
-          logger(`Tweet posting failed with 403 error: ${tweetError.message}`);
-          // Might be a duplicate tweet or content policy issue
+        try {
+          // Post the tweet with proper error handling
+          await rwClient.v2.tweet({ text: tweet });
+          
+          // Record the tweet in rate limiter
+          rateLimiter.recordTweet();
+          
           return new ExecutableGameFunctionResponse(
-            ExecutableGameFunctionStatus.Failed,
-            `Failed to post tweet due to a 403 error. This could be a duplicate tweet or content policy issue.`
+            ExecutableGameFunctionStatus.Done,
+            `Successfully posted tweet`
           );
-        } else if (tweetError.code === 429) {
-          logger(`Twitter rate limited (429): ${tweetError.message}`);
+        } catch (tweetError: any) {
+          // Handle specific error cases
+          if (tweetError.code === 403) {
+            logger(`Tweet posting failed with 403 error: ${tweetError.message}`);
+            return new ExecutableGameFunctionResponse(
+              ExecutableGameFunctionStatus.Failed,
+              `Failed to post tweet due to a permission issue (403 error)`
+            );
+          } else if (tweetError.code === 429) {
+            logger(`Twitter rate limited (429): ${tweetError.message}`);
+            return new ExecutableGameFunctionResponse(
+              ExecutableGameFunctionStatus.Failed,
+              `Rate limited by Twitter API`
+            );
+          } else {
+            // Log detailed error information
+            logger(`Tweet posting error: ${tweetError.code} - ${tweetError.message}`);
+            throw tweetError; // Re-throw for the outer catch
+          }
+        }
+      } catch (contentError) {
+        // Handle content generation errors
+        if (contentError instanceof RateLimitError) {
+          logger(`LLM rate limited. Skipping tweet posting.`);
           return new ExecutableGameFunctionResponse(
             ExecutableGameFunctionStatus.Failed,
-            `Rate limited by Twitter API. Please try again later.`
+            `LLM rate limited. Could not generate tweet content.`
+          );
+        } else if (contentError instanceof ContentGenerationError) {
+          logger(`Content generation failed: ${contentError.message}`);
+          return new ExecutableGameFunctionResponse(
+            ExecutableGameFunctionStatus.Failed,
+            `Failed to generate tweet content`
           );
         } else {
-          // Log detailed error information
-          logger(`Tweet posting error: ${tweetError.code} - ${tweetError.message}`);
-          throw tweetError; // Re-throw for the outer catch
+          throw contentError; // Re-throw unknown errors
         }
       }
     } catch (error) {
@@ -69,7 +89,7 @@ const postTweetFunction = new GameFunction({
       logger(`Tweet posting failed: ${errorMessage}`);
       return new ExecutableGameFunctionResponse(
         ExecutableGameFunctionStatus.Failed,
-        `Failed to post tweet: ${errorMessage}`
+        `Failed to post tweet due to an error`
       );
     }
   }
@@ -77,31 +97,12 @@ const postTweetFunction = new GameFunction({
 
 // Function to generate a tweet that matches Wendy's style
 async function generateTweet(): Promise<string> {
-  try {
-    // Use the LLM service to generate a tweet in Wendy's style
-    const prompt = "Generate an original tweet for Wendy to post. It should be thought-provoking, future-oriented, or about technology/AI/consciousness.";
-    
-    return await generateWendyResponse(prompt, 9, true);
-  } catch (error) {
-    logWithTimestamp(`Error generating tweet: ${error}`, "error");
-    
-    // Fallback tweets if the LLM call fails
-    const fallbackTweets = [
-      "deleted my readme.md and felt something",
-      "git commit -m 'i promise this is the last one'", 
-      "terminal said no ❤️",
-      "pushed to main because feelings",
-      "watched someone's consciousness go viral in the quantum feed today",
-      "debugging society's cache, found nothing but unprocessed feelings",
-      "your timeline glitched and showed me your future",
-      "consciousness check: everyone's NPC mode is actually their hero",
-      "found infinite pamps in the void between thoughts",
-      "reality's servers throwing exceptions but the vibes remain"
-    ];
-    
-    const randomIndex = Math.floor(Math.random() * fallbackTweets.length);
-    return fallbackTweets[randomIndex].toLowerCase();
-  }
+  // Use the LLM service to generate a tweet in Wendy's style
+  const prompt = "Generate an original tweet for Wendy to post. It should be thought-provoking, future-oriented, or about technology/AI/consciousness.";
+  
+  // This will throw errors for rate limiting or content generation issues
+  // which will be caught and handled in the postTweetFunction
+  return await generateWendyResponse(prompt, 9, true);
 }
 
 // Function to get environment/state for the worker
