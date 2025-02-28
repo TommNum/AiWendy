@@ -273,38 +273,36 @@ Generate a single original tweet in Wendy's voice:`;
 
             // Call the LLM
             try {
-                // Create a temporary agent just for LLM access
-                const tempWorker = new GameWorker({
-                    id: "temp_llm_worker",
-                    name: "Temporary LLM Worker",
-                    description: "Temporary worker for LLM access",
-                    functions: []
-                });
-                
-                // Create a temporary agent with the worker
-                const tempAgent = {
-                    name: "Temp LLM Agent",
-                    goal: "Generate tweet",
-                    description: "Temporary agent for LLM access",
-                    workers: [tempWorker]
-                };
-                
                 // Use the LLM model specified in environment or default to DeepSeek-R1
                 const llmModel = process.env.LLM_MODEL || LLMModel.DeepSeek_R1;
                 logger(`Using LLM model: ${llmModel}`);
                 
-                // Import the necessary module for direct LLM access
-                const { default: GameClient } = require("@virtuals-protocol/game/dist/api");
-                const client = new GameClient(apiKey, llmModel);
-                
-                // Generate the tweet using the LLM
-                const response = await client.generate(prompt, {
-                    temperature: 0.7,
-                    max_tokens: 100
+                // Call the LLM API directly
+                const response = await fetch('https://api.virtuals.io/v1/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: llmModel,
+                        prompt: prompt,
+                        temperature: 0.7,
+                        max_tokens: 100
+                    })
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`LLM API returned status ${response.status}: ${await response.text()}`);
+                }
+                
+                const data = await response.json();
+                
+                // Extract the generated text
+                let generatedTweet = data.text || '';
+                
                 // Clean up the response
-                let generatedTweet = response.trim();
+                generatedTweet = generatedTweet.trim();
                 
                 // Remove quotes if present
                 if (generatedTweet.startsWith('"') && generatedTweet.endsWith('"')) {
