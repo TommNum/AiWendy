@@ -105,14 +105,14 @@ async function postStartupTweet() {
         process.env.CURRENT_OPERATION = "post_tweet";
         process.env.TWEET_CONTENT = startupMessage;
         
-        // Use the agent's step method without the unsupported context parameter
-        await activity_agent.step({ verbose: true });
-        
-        // Clear the environment variables
-        delete process.env.CURRENT_OPERATION;
-        delete process.env.TWEET_CONTENT;
-        
-        console.log(`✅ Startup tweet posted successfully!`);
+        // Handle the response based on status
+        if (result.status === ExecutableGameFunctionStatus.Done) {
+            console.log(`✅ Startup tweet posted successfully!`);
+            return result;
+        } else {
+            console.error(`❌ Failed to post startup tweet`);
+            return null;
+        }
     } catch (error) {
         console.error("Error posting startup tweet:", error instanceof Error ? error.message : 'Unknown error');
     }
