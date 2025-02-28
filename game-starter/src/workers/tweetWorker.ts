@@ -1,6 +1,11 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+
+// Ensure environment variables are loaded from the correct location
+// This should be executed before any other code that uses environment variables
+dotenv.config({ path: path.join(__dirname, '../../.env') });
+
 import { 
     GameWorker, 
     GameFunction, 
@@ -17,8 +22,6 @@ import TwitterApi, {
     TweetV2LikeResult,
     UserV2Result,
 } from "twitter-api-v2";
-
-dotenv.config();
 
 // Define the interface for a tweet client (based on the original ITweetClient)
 interface ITweetClient {
@@ -236,6 +239,19 @@ export async function postToTwitter(tweetText: string): Promise<{ success: boole
         
         logger(`Posting tweet: ${tweetText}`);
         
+        // Log all credentials being used (masked for security)
+        const maskCredential = (str: string): string => {
+            if (!str) return 'undefined';
+            if (str.length <= 4) return str;
+            return str.substring(0, 4) + '...' + str.substring(str.length - 4);
+        };
+        
+        logger(`Twitter API credentials being used:`);
+        logger(`API Key: ${maskCredential(process.env.TWITTER_API_KEY || '')}`);
+        logger(`API Secret: ${maskCredential(process.env.TWITTER_API_SECRET || '')}`);
+        logger(`Access Token: ${maskCredential(process.env.TWITTER_ACCESS_TOKEN || '')}`);
+        logger(`Access Token Secret: ${maskCredential(process.env.TWITTER_ACCESS_TOKEN_SECRET || '')}`);
+        
         // Create TwitterClient instance using twitter-api-v2
         const twitterClient = new TwitterClient({
             apiKey: process.env.TWITTER_API_KEY || '',
@@ -243,6 +259,18 @@ export async function postToTwitter(tweetText: string): Promise<{ success: boole
             accessToken: process.env.TWITTER_ACCESS_TOKEN || '',
             accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET || ''
         });
+        
+        // First validate that the client can connect
+        try {
+            const userInfo = await twitterClient.me();
+            logger(`Successfully authenticated as user: ${userInfo.data.username} (${userInfo.data.id})`);
+        } catch (authError: any) {
+            logger(`Authentication test failed: ${authError.message}`);
+            if (authError.errors) {
+                logger(`Error details: ${JSON.stringify(authError.errors, null, 2)}`);
+            }
+            throw authError; // Re-throw to be caught by the outer try/catch
+        }
         
         // Post the tweet using the proper client
         if (process.env.NODE_ENV !== 'production') {
@@ -261,29 +289,67 @@ export async function postToTwitter(tweetText: string): Promise<{ success: boole
                 }
             };
         } else {
-            console.log(`[TWITTER] Posting real tweet: ${tweetText}`);
-            const result = await twitterClient.post(tweetText);
+            logger(`[TWITTER] Posting real tweet: ${tweetText}`);
             
-            // Mark the tweet as posted for rate limiting
-            twitterTweetsRateLimiter.markTweet();
-            
-            console.log(`[TWITTER] Tweet posted successfully with ID: ${result.data.id}`);
-            
-            // Save the tweet timestamp
-            saveTweetHistory(new Date().toISOString());
-            
-            return {
-                success: true,
-                data: result
-            };
+            try {
+                const result = await twitterClient.post(tweetText);
+                
+                // Mark the tweet as posted for rate limiting
+                twitterTweetsRateLimiter.markTweet();
+                
+                logger(`[TWITTER] Tweet posted successfully with ID: ${result.data.id}`);
+                
+                // Save the tweet timestamp
+                saveTweetHistory(new Date().toISOString());
+                
+                return {
+                    success: true,
+                    data: result
+                };
+            } catch (tweetError: any) {
+                logger(`[TWITTER] Error posting tweet: ${tweetError.message}`);
+                if (tweetError.errors) {
+                    logger(`[TWITTER] Error details: ${JSON.stringify(tweetError.errors, null, 2)}`);
+                }
+                throw tweetError; // Re-throw to be caught by the outer try/catch
+            }
         }
-    } catch (e) {
+    } catch (e: any) {
         const errorMessage = e instanceof Error ? e.message : 'Unknown error';
         logger(`Error posting tweet: ${errorMessage}`);
-        if (e instanceof Error && 'response' in e && e.response) {
-            // @ts-ignore - handling axios error structure
-            console.error('[TWITTER] API response:', e.response.status, e.response.data);
+        
+        // Enhanced error logging for better diagnostics
+        if (e instanceof Error) {
+            // For TwitterApi errors
+            if ('code' in e) {
+                logger(`Twitter API error code: ${(e as any).code}`);
+            }
+            
+            // For errors with data property (TwitterApi v2)
+            if ('data' in e) {
+                logger(`Twitter API error data: ${JSON.stringify((e as any).data, null, 2)}`);
+            }
+            
+            // For errors with errors array (TwitterApi v2)
+            if ('errors' in e && Array.isArray((e as any).errors)) {
+                logger(`Twitter API errors: ${JSON.stringify((e as any).errors, null, 2)}`);
+            }
+            
+            // For axios errors
+            if ('response' in e && e.response) {
+                // @ts-ignore - handling axios error structure
+                logger(`API response status: ${e.response.status}`);
+                // @ts-ignore - handling axios error structure
+                if (e.response.data) {
+                    // @ts-ignore - handling axios error structure
+                    logger(`API response data: ${JSON.stringify(e.response.data, null, 2)}`);
+                }
+            }
+            
+            // Additional stack trace for debugging
+            logger(`Stack trace: ${e.stack}`);
         }
+        
         return {
             success: false,
             error: errorMessage
