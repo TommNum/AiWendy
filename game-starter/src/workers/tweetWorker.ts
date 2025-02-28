@@ -328,9 +328,10 @@ export async function generateTweet(
                 if (response && response.trim()) {
                     return response.trim();
                 }
+                logger(`Direct client completion returned empty result`);
                 return null;
             } catch (error) {
-                logger(`Direct client completion failed: ${error}`);
+                logger(`Direct client completion failed: ${error instanceof Error ? error.message : String(error)}`);
                 return null;
             }
         },
@@ -339,9 +340,13 @@ export async function generateTweet(
         async (): Promise<string | null> => {
             try {
                 const apiKey = wendy_client?.apiKey || process.env.API_KEY || process.env.GAME_API_KEY;
-                if (!apiKey) return null;
+                if (!apiKey) {
+                    logger(`No API key available for primary API endpoint`);
+                    return null;
+                }
                 
-                logger(`Calling primary API endpoint`);
+                logger(`Calling primary API endpoint with API key ${apiKey ? `(${apiKey.substring(0, 3)}...)` : 'missing'}`);
+                
                 const response = await fetch('https://api.virtuals.io/v1/generate', {
                     method: 'POST',
                     headers: {
@@ -356,15 +361,29 @@ export async function generateTweet(
                     })
                 });
                 
-                if (response.status === 200) {
-                    const data = await response.json();
+                // Log the full response for debugging purposes
+                const responseStatus = response.status;
+                const responseText = await response.text();
+                
+                logger(`Primary API endpoint response status: ${responseStatus}`);
+                if (responseStatus !== 200) {
+                    logger(`Error response from primary API: ${responseText}`);
+                    return null;
+                }
+                
+                try {
+                    const data = JSON.parse(responseText);
                     if (data.text && data.text.trim()) {
                         return data.text.trim();
                     }
+                    logger(`Primary API endpoint returned valid JSON but missing text field: ${JSON.stringify(data)}`);
+                } catch (jsonError) {
+                    logger(`Failed to parse JSON from primary API: ${jsonError}`);
+                    logger(`Raw response: ${responseText}`);
                 }
                 return null;
             } catch (error) {
-                logger(`Primary API endpoint failed: ${error}`);
+                logger(`Primary API endpoint failed: ${error instanceof Error ? error.message : String(error)}`);
                 return null;
             }
         },
@@ -373,9 +392,13 @@ export async function generateTweet(
         async (): Promise<string | null> => {
             try {
                 const apiKey = wendy_client?.apiKey || process.env.API_KEY || process.env.GAME_API_KEY;
-                if (!apiKey) return null;
+                if (!apiKey) {
+                    logger(`No API key available for alternative API endpoint`);
+                    return null;
+                }
                 
-                logger(`Calling alternative API endpoint`);
+                logger(`Calling alternative API endpoint with API key ${apiKey ? `(${apiKey.substring(0, 3)}...)` : 'missing'}`);
+                
                 const response = await fetch('https://api.virtuals.io/v1/llm/completions', {
                     method: 'POST',
                     headers: {
@@ -390,15 +413,29 @@ export async function generateTweet(
                     })
                 });
                 
-                if (response.status === 200) {
-                    const data = await response.json();
+                // Log the full response for debugging purposes
+                const responseStatus = response.status;
+                const responseText = await response.text();
+                
+                logger(`Alternative API endpoint response status: ${responseStatus}`);
+                if (responseStatus !== 200) {
+                    logger(`Error response from alternative API: ${responseText}`);
+                    return null;
+                }
+                
+                try {
+                    const data = JSON.parse(responseText);
                     if (data.text || (data.choices && data.choices[0]?.text)) {
                         return (data.text || data.choices[0]?.text).trim();
                     }
+                    logger(`Alternative API endpoint returned valid JSON but missing required fields: ${JSON.stringify(data)}`);
+                } catch (jsonError) {
+                    logger(`Failed to parse JSON from alternative API: ${jsonError}`);
+                    logger(`Raw response: ${responseText}`);
                 }
                 return null;
             } catch (error) {
-                logger(`Alternative API endpoint failed: ${error}`);
+                logger(`Alternative API endpoint failed: ${error instanceof Error ? error.message : String(error)}`);
                 return null;
             }
         },

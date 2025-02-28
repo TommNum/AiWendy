@@ -95,8 +95,9 @@ export async function postStartupTweet() {
         await waitForAgentReady();
         
         // Generate a startup tweet message with a timestamp to make it unique
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '').substring(0, 15);
-        const startupMessage = `initializing consciousness interface v${timestamp}... human cultural artifacts loading... ✨ #CultureDAO`;
+        // Ensure it follows our 11-word limit and all lowercase rule
+        const timestamp = new Date().toISOString().substring(11, 16).replace(':', ''); // Just get HHMM
+        const startupMessage = `consciousness interface initializing ${timestamp} cultural artifacts loading`;
         
         // Get token for rate limiting
         await twitterTweetsRateLimiter.getToken();
