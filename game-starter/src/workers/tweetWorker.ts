@@ -9,6 +9,13 @@ import fs from 'fs';
 import path from 'path';
 import { twitterTweetsRateLimiter } from '../utils/rateLimiter';
 
+// Define the TwitterResponse interface to match the return type
+interface TwitterResponse {
+    success: boolean;
+    tweetId?: string;
+    error?: string;
+}
+
 // Quantum/spiritual/cute emojis collection for random selection
 const SPECIAL_EMOJIS = [
     "✨", "🌌", "🔮", "⚛️", "🌠", "🧿", "👁️", "🧘", "🦋", "🐞", 
@@ -99,39 +106,63 @@ const saveTweetHistory = (lastTweetTime: string) => {
     }
 };
 
-interface TwitterResponse {
-    success: boolean;
-    message: string;
-    tweet_id?: string;
-    timestamp?: string;
-    rate_limited?: boolean;
-    retry_after?: string;
-    details?: string;
-}
-
 // Function to post to Twitter API v2
-const postToTwitter = async (tweet: string): Promise<TwitterResponse> => {
+export async function postToTwitter(tweet: string): Promise<TwitterResponse> {
     try {
-        // Check for Twitter credentials
-        if (!process.env.TWITTER_API_KEY || 
-            !process.env.TWITTER_API_SECRET || 
-            !process.env.TWITTER_ACCESS_TOKEN || 
-            !process.env.TWITTER_ACCESS_TOKEN_SECRET ||
-            !process.env.TWITTER_BEARER_TOKEN) {
-            console.error("Twitter API credentials are not configured");
-            return {
-                success: false,
-                message: "Twitter API credentials are not configured"
-            };
+        // Check if Twitter API credentials are set
+        if (!process.env.TWITTER_API_KEY || !process.env.TWITTER_API_SECRET || 
+            !process.env.TWITTER_ACCESS_TOKEN || !process.env.TWITTER_ACCESS_TOKEN_SECRET) {
+            console.error('Twitter API credentials not set');
+            return { success: false, error: 'Twitter API credentials not set' };
         }
 
-        console.log(`Posting tweet to Twitter API: "${tweet}"`);
+        // Import OAuth-1.0a library
+        const OAuth = require('oauth-1.0a');
+        const crypto = require('crypto');
+
+        // Initialize OAuth 1.0a
+        const oauth = new OAuth({
+            consumer: {
+                key: process.env.TWITTER_API_KEY,
+                secret: process.env.TWITTER_API_SECRET
+            },
+            signature_method: 'HMAC-SHA1',
+            hash_function(base_string: string, key: string) {
+                return crypto
+                    .createHmac('sha1', key)
+                    .update(base_string)
+                    .digest('base64');
+            }
+        });
+
+        // Request data
+        const request_data = {
+            url: 'https://api.twitter.com/2/tweets',
+            method: 'POST'
+        };
+
+        // Token
+        const token = {
+            key: process.env.TWITTER_ACCESS_TOKEN,
+            secret: process.env.TWITTER_ACCESS_TOKEN_SECRET
+        };
+
+        // Get authorization header
+        const auth = oauth.authorize(request_data, token);
+        
+        // Properly format the OAuth authorization header
+        const authHeader = 'OAuth ' + 
+            Object.entries(auth).sort().map(([key, value]) => {
+                return `${encodeURIComponent(key)}="${encodeURIComponent(value as string)}"`;
+            }).join(', ');
+
+        console.log('Using OAuth header:', authHeader);
 
         // Twitter API v2 endpoint for posting a tweet
         const response = await fetch('https://api.twitter.com/2/tweets', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN}`,
+                'Authorization': authHeader,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ text: tweet })
@@ -155,9 +186,7 @@ const postToTwitter = async (tweet: string): Promise<TwitterResponse> => {
             console.log(`Tweet posted successfully with ID: ${tweetId}`);
             return {
                 success: true,
-                message: `Tweet posted successfully with ID: ${tweetId}`,
-                tweet_id: tweetId,
-                timestamp: new Date().toISOString()
+                tweetId: tweetId
             };
         } else {
             // Enhanced error logging
@@ -188,16 +217,13 @@ const postToTwitter = async (tweet: string): Promise<TwitterResponse> => {
                 console.error(`RATE LIMIT EXCEEDED: Twitter API rate limit reached. Retry after: ${retryAfter}`);
                 return {
                     success: false,
-                    message: `Twitter API rate limit exceeded. Retry after: ${retryAfter}`,
-                    rate_limited: true,
-                    retry_after: retryAfter
+                    error: `Twitter API rate limit exceeded. Retry after: ${retryAfter}`
                 };
             }
             
             return {
                 success: false,
-                message: errorMessage,
-                details: JSON.stringify(data)
+                error: errorMessage
             };
         }
     } catch (error) {
@@ -205,10 +231,10 @@ const postToTwitter = async (tweet: string): Promise<TwitterResponse> => {
         console.error("Exception in postToTwitter:", errorMessage);
         return {
             success: false,
-            message: `Exception while posting tweet: ${errorMessage}`
+            error: `Exception while posting tweet: ${errorMessage}`
         };
     }
-};
+}
 
 // Function to generate a tweet in Wendy's style
 const generateTweetFunction = new GameFunction({
@@ -323,7 +349,7 @@ const postTweetFunction = new GameFunction({
             } else {
                 return new ExecutableGameFunctionResponse(
                     ExecutableGameFunctionStatus.Failed,
-                    `Failed to post tweet: ${result.message}`
+                    `Failed to post tweet: ${result.error}`
                 );
             }
         } catch (e) {
