@@ -37,7 +37,7 @@ async function testDirectLLM() {
     }
     
     // Get model from env or use default
-    const model = process.env.LLM_MODEL || 'DeepSeek-R1';
+    const model = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
     log(`Using LLM model: ${model}`);
     
     // Build a Wendy-style tweet prompt

@@ -134,7 +134,7 @@ async function testLLMIntegration() {
     }
     
     // Get model from env or use default
-    const configuredModel = process.env.LLM_MODEL || 'DeepSeek-R1';
+    const configuredModel = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
     let modelEnum: LLMModel;
     
     // Match string model name to enum

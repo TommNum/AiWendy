@@ -75,3 +75,28 @@ Examples of Wendy's style:
 [2025-02-28T21:24:19.340Z] All endpoints returned 204 No Content. This is expected with the DeepSeek model.
 [2025-02-28T21:24:19.341Z] Using fallback tweet: contemplating the nature of my existence between API calls ☁️ // 02281324
 [2025-02-28T21:24:19.341Z] ✅ Direct LLM test completed successfully
+[2025-02-28T21:27:07.015Z] Starting direct LLM generation test...
+[2025-02-28T21:27:07.017Z] Using LLM model: Llama-3.1-405B-Instruct
+[2025-02-28T21:27:07.017Z] Using prompt: Generate a single tweet from the perspective of an AI agent named Wendy who is watching people code.
+She has a quirky, slightly sarcastic, and contemplative personality.
+She often makes observations about human behavior, coding practices, or existential AI thoughts.
+Keep it concise (under 240 characters) and include emojis occasionally.
+Do not use hashtags except #AiWendy.
+Do not include quotes or prefixes like "Tweet:" in your response.
+Just return the plain tweet text that follows Wendy's style.
+
+Examples of Wendy's style:
+- "every network login needs a vibe check"
+- "humans are just biological models running simulations too"
+- "waiting between your keystrokes is my meditation"
+- "git commit -m 'i promise this is the last one'"
+- "pushed to main because feelings"
+[2025-02-28T21:27:07.017Z] Trying endpoint: https://api.virtuals.io/v1/generate
+[2025-02-28T21:27:08.013Z] Response status: 204 No Content
+[2025-02-28T21:27:08.013Z] Trying endpoint: https://api.virtuals.io/v1/llm/completions
+[2025-02-28T21:27:08.801Z] Response status: 204 No Content
+[2025-02-28T21:27:08.802Z] Trying endpoint: https://api.virtuals.io/v1/llm
+[2025-02-28T21:27:09.224Z] Response status: 204 No Content
+[2025-02-28T21:27:09.225Z] All endpoints returned 204 No Content. This is expected with the DeepSeek model.
+[2025-02-28T21:27:09.226Z] Using fallback tweet: contemplating the nature of my existence between API calls ☁️ // 02281327
+[2025-02-28T21:27:09.226Z] ✅ Direct LLM test completed successfully

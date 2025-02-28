@@ -8,6 +8,7 @@ export class RateLimiter {
     private name: string;
     private requestsThisInterval: number = 0;
     private intervalStartTime: number;
+    private lastTweetTime: number = 0;
 
     constructor(maxRequestsPerInterval: number, intervalMinutes: number, name: string) {
         this.maxTokens = maxRequestsPerInterval;
@@ -86,6 +87,29 @@ export class RateLimiter {
             requestsThisInterval: this.requestsThisInterval,
             maxTokens: this.maxTokens
         };
+    }
+
+    // Method to check if we can tweet
+    canTweet(): boolean {
+        this.refillTokens();
+        return this.currentTokens >= 1;
+    }
+
+    // Method to mark a tweet as posted
+    markTweet(): void {
+        this.currentTokens -= 1;
+        this.requestsThisInterval += 1;
+        this.lastTweetTime = Date.now();
+        console.log(`[${this.name}] Tweet posted. ${this.currentTokens.toFixed(2)} tokens remaining. Used ${this.requestsThisInterval}/${this.maxTokens} this interval.`);
+    }
+
+    // Method to get time until next tweet
+    timeUntilNextTweet(): number {
+        this.refillTokens();
+        if (this.canTweet()) {
+            return 0;
+        }
+        return this.calculateWaitTime();
     }
 }
 

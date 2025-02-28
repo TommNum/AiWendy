@@ -293,7 +293,7 @@ export async function generateTweet(
             const completionOptions = {
                 temperature: wendy_options?.temp || parseFloat(process.env.LLM_TEMPERATURE || '0.7'),
                 maxTokens: wendy_options?.max_tokens || parseInt(process.env.LLM_MAX_TOKENS || '100'),
-                model: process.env.LLM_MODEL || 'DeepSeek-R1'
+                model: process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct'
             };
             
             // Log the attempt
@@ -362,7 +362,7 @@ export async function generateTweet(
             }
             
             // Get model name from environment or use default
-            const configuredModel = process.env.LLM_MODEL || 'DeepSeek-R1';
+            const configuredModel = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
             let modelEnum: LLMModel;
             
             // Match string model name to enum
@@ -383,7 +383,7 @@ export async function generateTweet(
                     modelEnum = LLMModel.Qwen_2_5_72B_Instruct;
                     break;
                 default:
-                    modelEnum = LLMModel.DeepSeek_R1;
+                    modelEnum = LLMModel.Llama_3_1_405B_Instruct;
             }
             
             // Create a worker specifically designed to capture LLM generation
@@ -420,7 +420,7 @@ export async function generateTweet(
                             fnLogger(`Received tweet: ${args.tweet}`);
                             return new ExecutableGameFunctionResponse(
                                 ExecutableGameFunctionStatus.Done,
-                                args.tweet
+                                args.tweet || "No tweet content provided"
                             );
                         }
                     })
@@ -568,7 +568,7 @@ async function directAPITweetGeneration(
     // Configure options
     const temperature = options?.temp || parseFloat(process.env.LLM_TEMPERATURE || '0.7');
     const maxTokens = options?.max_tokens || parseInt(process.env.LLM_MAX_TOKENS || '100');
-    const model = process.env.LLM_MODEL || 'DeepSeek-R1';
+    const model = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
     
     logger(`Using model: ${model}, temperature: ${temperature}, maxTokens: ${maxTokens}`);
     logger(`Using prompt: ${prompt}`);
@@ -902,7 +902,7 @@ export const tweetWorker = new GameWorker({
         // Get the LLM model from environment or use default
         // We're using the string value here for environment passing
         // and properly handling the enum in the agent.ts file
-        const llmModel = process.env.LLM_MODEL || "DeepSeek-R1";
+        const llmModel = process.env.LLM_MODEL || "Llama-3.1-405B-Instruct";
         
         return {
             last_tweet_time: lastTweetTime,
