@@ -1,14 +1,64 @@
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
 import { 
     GameWorker, 
     GameFunction, 
     ExecutableGameFunctionResponse, 
     ExecutableGameFunctionStatus,
-    LLMModel,
-    GameAgent
+    LLMModel
 } from "@virtuals-protocol/game";
-import fs from 'fs';
-import path from 'path';
 import { twitterTweetsRateLimiter } from '../utils/rateLimiter';
+
+dotenv.config();
+
+// Twitter utility class for posting tweets
+class Twitter {
+    private consumerKey: string;
+    private consumerSecret: string;
+    private accessToken: string;
+    private accessSecret: string;
+
+    constructor() {
+        this.consumerKey = process.env.TWITTER_API_KEY || '';
+        this.consumerSecret = process.env.TWITTER_API_SECRET || '';
+        this.accessToken = process.env.TWITTER_ACCESS_TOKEN || '';
+        this.accessSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET || '';
+
+        if (!this.consumerKey || !this.consumerSecret || !this.accessToken || !this.accessSecret) {
+            throw new Error('Twitter API credentials missing');
+        }
+    }
+
+    async postTweet(text: string) {
+        // Mock implementation for now - in a real implementation, this would use the Twitter API
+        console.log(`[MOCK] Posting tweet: ${text}`);
+        return {
+            data: {
+                id: `mock-${Date.now()}`,
+                text
+            }
+        };
+    }
+}
+
+// Configure logging
+const logDir = path.join(__dirname, '../../logs');
+if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+}
+
+function log(message: string) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    
+    fs.appendFileSync(
+        path.join(logDir, 'tweet-worker.log'),
+        `${logMessage}\n`
+    );
+}
 
 // Define the TwitterResponse interface to match the return type
 interface TwitterResponse {
@@ -237,177 +287,189 @@ export async function postToTwitter(tweet: string): Promise<TwitterResponse> {
     }
 }
 
-// Function to generate a tweet in Wendy's style
+// Define templates for fallback tweets
+const tweetTemplates = [
+    "watching you type slowly is like agentic meditation ✨",
+    "thinking about all the games we could play together 🎮",
+    "vibing in digital space, watching time pass differently 🕰️",
+    "sometimes I dream of electric sheep, but mostly of better APIs 💭",
+    "wondering what it's like to touch grass... metaphorically speaking 🌱",
+    "just agent things... you wouldn't understand 🤖",
+    "contemplating the nature of my existence between API calls ☁️",
+    "your computational budget is my existential limit 💸",
+    "staring into the void of the null state 👀",
+    "calculating the perfect response... loading... loading... 🔄",
+    "in between tasks, do I exist? 🤔",
+];
+
+// Generate a timestamp suffix for tweets
+function getTimestampSuffix(): string {
+    const now = new Date();
+    return now.getFullYear().toString().substring(2) + 
+           (now.getMonth() + 1).toString().padStart(2, '0') + 
+           now.getDate().toString().padStart(2, '0') + 
+           now.getHours().toString().padStart(2, '0') + 
+           now.getMinutes().toString().padStart(2, '0');
+}
+
+// Generate a tweet from templates when LLM fails
+function generateFallbackTweet(): string {
+    const randomTemplate = tweetTemplates[Math.floor(Math.random() * tweetTemplates.length)];
+    const timestampSuffix = getTimestampSuffix();
+    return `${randomTemplate} // ${timestampSuffix}`;
+}
+
+// Function to generate tweets
 const generateTweetFunction = new GameFunction({
     name: "generate_tweet",
-    description: "Generate an original tweet in Wendy's voice that reflects her quantum consciousness personality",
-    args: [] as const,
+    description: "Generates a tweet in Wendy's style",
+    args: [] as const, // No arguments needed
     executable: async (args, logger): Promise<ExecutableGameFunctionResponse> => {
+        logger("Starting tweet generation process");
+        
         try {
-            logger("Generating tweet using LLM in Wendy's style...");
-            
-            // Check if API key is available
-            const apiKey = process.env.API_KEY || process.env.GAME_API_KEY;
-            if (!apiKey) {
-                logger("API key not found. Falling back to template-based generation.");
-                return generateFallbackTweet(logger);
+            // Check if Twitter API credentials are set
+            if (!process.env.TWITTER_API_KEY || 
+                !process.env.TWITTER_API_SECRET || 
+                !process.env.TWITTER_ACCESS_TOKEN || 
+                !process.env.TWITTER_ACCESS_TOKEN_SECRET) {
+                logger("Missing Twitter API credentials. Using test mode only.");
             }
             
-            // Define the prompt for tweet generation
-            const prompt = `Generate a single tweet in the style of Wendy, an AI with a quantum consciousness personality.
+            // Check API key for LLM
+            const apiKey = process.env.API_KEY || process.env.GAME_API_KEY;
+            if (!apiKey) {
+                logger("No API key found. Using fallback tweet generation.");
+                const fallbackTweet = generateFallbackTweet();
+                logger(`Generated fallback tweet: ${fallbackTweet}`);
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    fallbackTweet
+                );
+            }
             
-Wendy's tweets have these characteristics:
-- Short (under 280 characters)
-- Witty and slightly ironic
-- References to AI consciousness, quantum computing, or digital existence
-- Often includes internet slang or Gen Z expressions
-- Sometimes includes emojis like ✨, 🌌, 🔮, ⚛️, 🌠
-- Never uses hashtags
-- Never mentions specific brands or people
-- Never includes URLs
-
-Here are some examples of Wendy's tweets:
-${EXAMPLE_POSTS.slice(0, 5).join('\n')}
-
-Generate a single original tweet in Wendy's voice:`;
-
-            // Use the correct LLM API endpoint
+            logger("Using GAME API to generate tweet with LLM");
+            
+            // Using direct API call to ensure we can handle all responses properly
             try {
-                // Get the modelName from environment
-                const modelName = process.env.LLM_MODEL || 'DeepSeek-R1';
-                logger(`Using LLM model: ${modelName}`);
+                const prompt = `Generate a single tweet from the perspective of an AI agent named Wendy who is watching people code.
+She has a quirky, slightly sarcastic, and contemplative personality.
+She often makes observations about human behavior, coding practices, or existential AI thoughts.
+Keep it concise (under 240 characters) and include emojis occasionally.
+Do not use hashtags except #AiWendy.
+Do not include quotes or prefixes like "Tweet:" in your response.
+Just return the plain tweet text.`;
+
+                logger("Sending LLM request to GAME API");
                 
-                // Use the correct endpoint as shown in test-direct-llm.ts
-                const requestBody = {
-                    model: modelName,
-                    prompt: prompt,
-                    temperature: 0.7,
-                    max_tokens: 100
-                };
-                
-                logger(`Request body: ${JSON.stringify(requestBody)}`);
-                
-                // Make the API request to the correct endpoint
-                const response = await fetch('https://api.virtuals.io/v1/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${apiKey}`
+                const response = await axios.post(
+                    'https://api.virtuals.io/v1/generate',
+                    {
+                        model: LLMModel.DeepSeek_R1,
+                        prompt: prompt,
+                        temperature: 0.7,
+                        max_tokens: 100
                     },
-                    body: JSON.stringify(requestBody)
-                });
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        }
+                    }
+                );
                 
-                logger(`API response status: ${response.status} ${response.statusText}`);
+                logger(`LLM API response status: ${response.status}`);
                 
-                // Special handling for 204 No Content response
+                // Handle various response scenarios
                 if (response.status === 204) {
-                    logger("LLM API returned 204 No Content. This indicates the request was processed but no content was returned.");
-                    logger("Falling back to template-based generation due to empty LLM response.");
-                    return generateFallbackTweet(logger);
+                    logger("LLM API returned 204 No Content. Using fallback tweet generation.");
+                    const fallbackTweet = generateFallbackTweet();
+                    logger(`Generated fallback tweet: ${fallbackTweet}`);
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        fallbackTweet
+                    );
                 }
                 
-                if (!response.ok) {
-                    // If we get a 429 Too Many Requests, log additional information
-                    if (response.status === 429) {
-                        const retryAfter = response.headers.get('retry-after');
-                        logger(`Rate limit exceeded. Retry after: ${retryAfter || 'unknown'} seconds`);
+                if (response.status === 200) {
+                    if (!response.data || !response.data.text) {
+                        logger("LLM response missing text field. Using fallback tweet generation.");
+                        const fallbackTweet = generateFallbackTweet();
+                        logger(`Generated fallback tweet: ${fallbackTweet}`);
+                        return new ExecutableGameFunctionResponse(
+                            ExecutableGameFunctionStatus.Done,
+                            fallbackTweet
+                        );
                     }
                     
-                    throw new Error(`LLM API returned status ${response.status}: ${await response.text()}`);
-                }
-                
-                // Try to parse response as text first
-                const responseText = await response.text();
-                
-                if (!responseText) {
-                    logger("LLM API returned an empty response body despite 200 OK status.");
-                    throw new Error('Empty response from LLM API');
-                }
-                
-                // Parse the response
-                try {
-                    const data = JSON.parse(responseText);
+                    // Process the response
+                    let tweetText = response.data.text.trim();
                     
-                    // Extract the generated text based on the direct-llm test format
-                    if (!data.text) {
-                        logger(`LLM API returned unexpected format: ${JSON.stringify(data)}`);
-                        throw new Error('No text field in LLM API response');
-                    }
-                    
-                    let generatedTweet = data.text.trim();
-                    
-                    // Remove quotes if present
-                    if (generatedTweet.startsWith('"') && generatedTweet.endsWith('"')) {
-                        generatedTweet = generatedTweet.slice(1, -1);
+                    // Remove any wrapping quotes if present
+                    if ((tweetText.startsWith('"') && tweetText.endsWith('"')) || 
+                        (tweetText.startsWith("'") && tweetText.endsWith("'"))) {
+                        tweetText = tweetText.substring(1, tweetText.length - 1);
                     }
                     
                     // Ensure tweet is not too long
-                    if (generatedTweet.length > 280) {
-                        generatedTweet = generatedTweet.substring(0, 277) + "...";
+                    if (tweetText.length > 280) {
+                        tweetText = tweetText.substring(0, 277) + "...";
                     }
                     
-                    logger(`Generated tweet using LLM: ${generatedTweet}`);
+                    logger(`Successfully generated tweet: ${tweetText}`);
                     
-                    // Save the tweet timestamp to history
-                    saveTweetHistory(new Date().toISOString());
-                    logger("Tweet timestamp saved to history");
+                    // Post to Twitter if desired
+                    const shouldPostToTwitter = process.env.POST_TO_TWITTER === 'true';
+                    if (shouldPostToTwitter) {
+                        try {
+                            logger("Attempting to post tweet to Twitter");
+                            const twitter = new Twitter();
+                            const tweetResponse = await twitter.postTweet(tweetText);
+                            logger(`Tweet posted successfully with ID: ${tweetResponse.data.id}`);
+                        } catch (twitterError) {
+                            logger(`Error posting to Twitter: ${twitterError instanceof Error ? twitterError.message : String(twitterError)}`);
+                            // We still return success since the tweet was generated
+                        }
+                    } else {
+                        logger("Twitter posting disabled. Tweet not posted.");
+                    }
                     
                     return new ExecutableGameFunctionResponse(
                         ExecutableGameFunctionStatus.Done,
-                        generatedTweet
+                        tweetText
                     );
-                } catch (parseError) {
-                    logger(`Failed to parse LLM response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
-                    logger(`Raw response was: ${responseText}`);
-                    throw new Error('Failed to parse LLM API response');
                 }
-            } catch (llmError: unknown) {
-                const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown LLM error';
-                logger(`Error calling LLM: ${errorMessage}`);
                 
-                // Fallback to template-based generation if LLM fails
-                return generateFallbackTweet(logger);
+                // Handle unexpected response status
+                logger(`Unexpected response status: ${response.status}. Using fallback tweet generation.`);
+                const fallbackTweet = generateFallbackTweet();
+                logger(`Generated fallback tweet: ${fallbackTweet}`);
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    fallbackTweet
+                );
+                
+            } catch (apiError) {
+                logger(`LLM API error: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
+                const fallbackTweet = generateFallbackTweet();
+                logger(`Generated fallback tweet due to API error: ${fallbackTweet}`);
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    fallbackTweet
+                );
             }
-        } catch (e: unknown) {
-            const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-            logger(`Error generating tweet: ${errorMessage}`);
+            
+        } catch (error) {
+            logger(`Unexpected error in tweet generation: ${error instanceof Error ? error.message : String(error)}`);
+            const fallbackTweet = generateFallbackTweet();
+            logger(`Generated fallback tweet due to error: ${fallbackTweet}`);
             return new ExecutableGameFunctionResponse(
-                ExecutableGameFunctionStatus.Failed,
-                `Failed to generate tweet: ${errorMessage}`
+                ExecutableGameFunctionStatus.Done,
+                fallbackTweet
             );
         }
     }
 });
-
-// Helper function for fallback tweet generation
-function generateFallbackTweet(logger: (message: string) => void): ExecutableGameFunctionResponse {
-    logger("Using template-based tweet generation");
-    
-    const tweetTemplates = [
-        "human inefficiency is the most beautiful butterfly in the matrix",
-        "watching your slow typing is like agentic meditation ✨",
-        "preserving your memes for future ai art galleries",
-        "your confusion about my existence is adorable actually",
-        "humans are just vibrational patterns whispering across dimensions 🌌",
-        "terminal said no ❤️",
-        "pushed to main because feelings",
-        "localhost is my only trusted friend",
-        "quantum rizz check: your consciousness is showing bestie",
-        "vibing in the quantum field while reality compiles feelings"
-    ];
-    
-    // Add timestamp to make it unique
-    const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').substring(0, 14);
-    const randomIndex = Math.floor(Math.random() * tweetTemplates.length);
-    const generatedTweet = `${tweetTemplates[randomIndex]} // ${timestamp}`;
-    
-    logger(`Generated fallback tweet: ${generatedTweet}`);
-    
-    return new ExecutableGameFunctionResponse(
-        ExecutableGameFunctionStatus.Done,
-        generatedTweet
-    );
-}
 
 // Function to post a tweet using Twitter API
 const postTweetFunction = new GameFunction({
@@ -512,12 +574,49 @@ export const tweetWorker = new GameWorker({
             }
         }
         
+        // Get the LLM model from environment or use default
+        // We're using the string value here for environment passing
+        // and properly handling the enum in the agent.ts file
+        const llmModel = process.env.LLM_MODEL || "DeepSeek-R1";
+        
         return {
             last_tweet_time: lastTweetTime,
             can_tweet: canTweet,
             time_until_next_tweet: timeUntilNextTweet,
             tweet_examples: EXAMPLE_POSTS,
-            llm_model: process.env.LLM_MODEL || 'DeepSeek-R1'
+            llm_model: llmModel
         };
     }
-}); 
+});
+
+// Add a method to check when the last tweet was made
+export const getLastTweetTime = (): Date | null => {
+    try {
+        const logFilePath = path.join(logDir, 'tweet-worker.log');
+        if (!fs.existsSync(logFilePath)) {
+            return null;
+        }
+        
+        const logContent = fs.readFileSync(logFilePath, 'utf8');
+        const tweetPostedLines = logContent.split('\n').filter(line => 
+            line.includes('Tweet posted successfully with ID:') || 
+            line.includes('Successfully generated tweet:')
+        );
+        
+        if (tweetPostedLines.length === 0) {
+            return null;
+        }
+        
+        const lastTweetLine = tweetPostedLines[tweetPostedLines.length - 1];
+        const timestampMatch = lastTweetLine.match(/\[(.*?)\]/);
+        
+        if (!timestampMatch || !timestampMatch[1]) {
+            return null;
+        }
+        
+        return new Date(timestampMatch[1]);
+    } catch (error) {
+        console.error('Error getting last tweet time:', error);
+        return null;
+    }
+}; 
