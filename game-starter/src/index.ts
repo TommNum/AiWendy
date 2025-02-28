@@ -87,7 +87,7 @@ interface TaskConfig {
 }
 
 // Function to post a startup tweet
-async function postStartupTweet() {
+export async function postStartupTweet() {
     try {
         console.log("🚀 Posting startup tweet...");
         
@@ -105,16 +105,25 @@ async function postStartupTweet() {
         process.env.CURRENT_OPERATION = "post_tweet";
         process.env.TWEET_CONTENT = startupMessage;
         
-        // Handle the response based on status
-        if (result.status === ExecutableGameFunctionStatus.Done) {
-            console.log(`✅ Startup tweet posted successfully!`);
-            return result;
-        } else {
-            console.error(`❌ Failed to post startup tweet`);
-            return null;
-        }
+        // Execute the tweet operation via the agent
+        await activity_agent.step({ verbose: true });
+        
+        // Log success message
+        console.log(`✅ Startup tweet posted successfully!`);
+        
+        // Clean up environment variables
+        delete process.env.CURRENT_OPERATION;
+        delete process.env.TWEET_CONTENT;
+        
+        return true;
     } catch (error) {
         console.error("Error posting startup tweet:", error instanceof Error ? error.message : 'Unknown error');
+        
+        // Clean up environment variables even if there's an error
+        delete process.env.CURRENT_OPERATION;
+        delete process.env.TWEET_CONTENT;
+        
+        return false;
     }
 }
 
@@ -219,3 +228,6 @@ async function main() {
 
 // Start the agent
 main();
+
+// Export main for potential imports
+export { main };

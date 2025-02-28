@@ -252,7 +252,7 @@ const analyzeTweetSentiment = new GameFunction({
                     },
                     body: JSON.stringify({
                         messages: [{ role: "user", content: prompt }],
-                        model: process.env.LLM_MODEL || LLMModel.DeepSeek_R1
+                        model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct"
                     })
                 });
                 

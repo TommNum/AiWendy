@@ -367,12 +367,6 @@ export async function generateTweet(
             
             // Match string model name to enum
             switch (configuredModel) {
-                case 'DeepSeek-R1':
-                    modelEnum = LLMModel.DeepSeek_R1;
-                    break;
-                case 'DeepSeek-V3':
-                    modelEnum = LLMModel.DeepSeek_V3;
-                    break;
                 case 'Llama-3.1-405B-Instruct':
                     modelEnum = LLMModel.Llama_3_1_405B_Instruct;
                     break;
@@ -382,7 +376,15 @@ export async function generateTweet(
                 case 'Qwen-2.5-72B-Instruct':
                     modelEnum = LLMModel.Qwen_2_5_72B_Instruct;
                     break;
+                // Legacy models support
+                case 'DeepSeek-R1':
+                    modelEnum = LLMModel.DeepSeek_R1;
+                    break;
+                case 'DeepSeek-V3':
+                    modelEnum = LLMModel.DeepSeek_V3;
+                    break;
                 default:
+                    // Default to Llama model
                     modelEnum = LLMModel.Llama_3_1_405B_Instruct;
             }
             
