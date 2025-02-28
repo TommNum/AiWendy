@@ -34,6 +34,10 @@ const wendyPlan = [
 
 const wendyPlanReasoning = "Highlight charisma and innovation and always find the most creative way to engage with people to make the best use of their attention while keeping people knowledgeable about the culture DAO which is the best way to build an extension into you (Wendy)";
 
+// Agent state tracking
+let isAgentInitialized = false;
+let initializationPromise: Promise<void> | null = null;
+
 // Create the agent with all necessary workers
 export const activity_agent = new GameAgent(process.env.API_KEY, {
     name: "Wendy - Quantum Consciousness Interface",
@@ -59,7 +63,7 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
         twitterSearchWorker, 
         daoEngagementWorker
     ],
-    llmModel: LLMModel.DeepSeek_R1,
+    llmModel: LLMModel.Llama_3_1_405B_Instruct,
     getAgentState: async () => {
         // Return plan and reasoning as part of agent state
         return {
@@ -76,10 +80,74 @@ activity_agent.setLogger((agent, msg) => {
     console.log("------------------------\n");
 });
 
+/**
+ * Initialize the agent if not already initialized
+ * Returns a promise that resolves when initialization is complete
+ */
+export async function initializeAgent(): Promise<void> {
+    // If already initialized, return immediately
+    if (isAgentInitialized) {
+        return Promise.resolve();
+    }
+    
+    // If initialization is in progress, return the existing promise
+    if (initializationPromise) {
+        return initializationPromise;
+    }
+    
+    // Start initialization and save the promise
+    console.log("🔄 Starting agent initialization...");
+    initializationPromise = activity_agent.init()
+        .then(() => {
+            console.log("✅ Agent initialization complete");
+            isAgentInitialized = true;
+        })
+        .catch((error) => {
+            console.error("❌ Agent initialization failed:", error);
+            // Reset the promise so we can try again
+            initializationPromise = null;
+            throw error;
+        });
+    
+    return initializationPromise;
+}
+
+/**
+ * Check if the agent is initialized
+ */
+export function isAgentReady(): boolean {
+    return isAgentInitialized;
+}
+
+/**
+ * Wait for the agent to be ready before proceeding
+ * This can be used by any function that needs the agent to be initialized
+ */
+export async function waitForAgentReady(timeout = 60000): Promise<void> {
+    if (isAgentInitialized) {
+        return Promise.resolve();
+    }
+    
+    console.log("⏳ Waiting for agent to be ready...");
+    
+    // If initialization hasn't started, start it
+    if (!initializationPromise) {
+        return initializeAgent();
+    }
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error("Agent initialization timed out")), timeout);
+    });
+    
+    // Race the initialization promise against the timeout
+    return Promise.race([initializationPromise, timeoutPromise]);
+}
+
 // Self-executing async function to run the agent - matching the Twitter example pattern
 (async () => {
     // Initialize the agent
-    await activity_agent.init();
+    await initializeAgent();
     
     // Run the agent with 60 seconds interval
     // This will stop when the agent decides to wait

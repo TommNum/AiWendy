@@ -1,23 +1,99 @@
 // Rate limiter implementation for different API services
+import fs from 'fs';
+import path from 'path';
+
+// Default storage location for rate limiter state
+const RATE_LIMITER_DIR = path.join(process.cwd(), 'data', 'rate-limiters');
+
+// Make sure the directory exists
+if (!fs.existsSync(RATE_LIMITER_DIR)) {
+    fs.mkdirSync(RATE_LIMITER_DIR, { recursive: true });
+}
+
 export class RateLimiter {
     private maxTokens: number;
     private tokensPerInterval: number;
     private intervalMs: number;
-    private currentTokens: number;
-    private lastRefillTime: number;
+    private currentTokens: number = 0;
+    private lastRefillTime: number = Date.now();
     private name: string;
     private requestsThisInterval: number = 0;
-    private intervalStartTime: number;
+    private intervalStartTime: number = Date.now();
     private lastTweetTime: number = 0;
+    private persistencePath: string;
+    private persistenceEnabled: boolean;
 
-    constructor(maxRequestsPerInterval: number, intervalMinutes: number, name: string) {
+    constructor(maxRequestsPerInterval: number, intervalMinutes: number, name: string, enablePersistence: boolean = true) {
         this.maxTokens = maxRequestsPerInterval;
         this.intervalMs = intervalMinutes * 60 * 1000;
         this.tokensPerInterval = maxRequestsPerInterval;
-        this.currentTokens = maxRequestsPerInterval;
+        this.name = name;
+        this.persistenceEnabled = enablePersistence;
+        this.persistencePath = path.join(RATE_LIMITER_DIR, `${this.name.replace(/[^a-z0-9_-]/gi, '_').toLowerCase()}.json`);
+        
+        // Try to load persisted state if enabled
+        if (this.persistenceEnabled) {
+            const loadedState = this.loadState();
+            if (loadedState) {
+                // Check if saved state is still valid (not too old)
+                const now = Date.now();
+                if ((now - loadedState.lastRefillTime) < (intervalMinutes * 120 * 1000)) { // 2x interval as max age
+                    this.currentTokens = loadedState.currentTokens;
+                    this.lastRefillTime = loadedState.lastRefillTime;
+                    this.requestsThisInterval = loadedState.requestsThisInterval;
+                    this.intervalStartTime = loadedState.intervalStartTime;
+                    this.lastTweetTime = loadedState.lastTweetTime || 0;
+                    console.log(`[${this.name}] Loaded persisted state: ${this.currentTokens.toFixed(2)} tokens, ${this.requestsThisInterval} requests this interval`);
+                } else {
+                    console.log(`[${this.name}] Persisted state too old, starting fresh`);
+                    this.initializeDefaultState();
+                }
+            } else {
+                this.initializeDefaultState();
+            }
+        } else {
+            this.initializeDefaultState();
+        }
+    }
+    
+    private initializeDefaultState(): void {
+        this.currentTokens = this.maxTokens;
         this.lastRefillTime = Date.now();
         this.intervalStartTime = Date.now();
-        this.name = name;
+    }
+    
+    private persistState(): void {
+        if (!this.persistenceEnabled) return;
+        
+        try {
+            const state = {
+                maxTokens: this.maxTokens,
+                tokensPerInterval: this.tokensPerInterval,
+                intervalMs: this.intervalMs,
+                currentTokens: this.currentTokens,
+                lastRefillTime: this.lastRefillTime,
+                requestsThisInterval: this.requestsThisInterval,
+                intervalStartTime: this.intervalStartTime,
+                lastTweetTime: this.lastTweetTime,
+                lastUpdate: Date.now()
+            };
+            
+            fs.writeFileSync(this.persistencePath, JSON.stringify(state, null, 2));
+        } catch (error) {
+            console.error(`[${this.name}] Error persisting rate limiter state:`, error);
+        }
+    }
+    
+    private loadState(): any {
+        try {
+            if (fs.existsSync(this.persistencePath)) {
+                const data = fs.readFileSync(this.persistencePath, 'utf8');
+                return JSON.parse(data);
+            }
+        } catch (error) {
+            console.error(`[${this.name}] Error loading rate limiter state:`, error);
+        }
+        return null;
     }
 
     private refillTokens(): void {
@@ -42,6 +118,11 @@ export class RateLimiter {
             if (Math.floor(oldTokens) !== Math.floor(this.currentTokens)) {
                 console.log(`[${this.name}] Refilled tokens: ${oldTokens.toFixed(2)} → ${this.currentTokens.toFixed(2)}`);
             }
+            
+            // Persist state after significant token changes
+            if (Math.floor(oldTokens) !== Math.floor(this.currentTokens)) {
+                this.persistState();
+            }
         }
     }
 
@@ -60,6 +141,7 @@ export class RateLimiter {
             this.currentTokens -= 1;
             this.requestsThisInterval += 1;
             console.log(`[${this.name}] Token consumed. ${this.currentTokens.toFixed(2)} tokens remaining. Used ${this.requestsThisInterval}/${this.maxTokens} this interval.`);
+            this.persistState();
             return Promise.resolve();
         } else {
             // No tokens available, calculate wait time for next token
@@ -73,6 +155,7 @@ export class RateLimiter {
                     this.currentTokens -= 1;
                     this.requestsThisInterval += 1;
                     console.log(`[${this.name}] Token consumed after waiting. ${this.currentTokens.toFixed(2)} tokens remaining.`);
+                    this.persistState();
                     resolve();
                 }, waitTime);
             });
@@ -101,6 +184,7 @@ export class RateLimiter {
         this.requestsThisInterval += 1;
         this.lastTweetTime = Date.now();
         console.log(`[${this.name}] Tweet posted. ${this.currentTokens.toFixed(2)} tokens remaining. Used ${this.requestsThisInterval}/${this.maxTokens} this interval.`);
+        this.persistState();
     }
 
     // Method to get time until next tweet

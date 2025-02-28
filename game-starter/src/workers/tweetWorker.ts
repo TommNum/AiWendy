@@ -264,7 +264,8 @@ Examples of Wendy's style:
 }
 
 /**
- * Generates a tweet using the Game Protocol LLM capabilities
+ * Generates a tweet using a streamlined pipeline with proper error handling
+ * Implements a more straightforward approach with fewer fallback methods
  */
 export async function generateTweet(
     wendy_client: GameClient | null,
@@ -274,491 +275,161 @@ export async function generateTweet(
         max_tokens?: number;
     }
 ): Promise<string> {
-    try {
-        logger(`Generating tweet with GameClient...`);
-        
-        // Validate that the client is initialized
-        if (!wendy_client) {
-            logger(`No GameClient available, falling back to direct API call`);
-            return directAPITweetGeneration(wendy_options);
-        }
-        
-        // First, try to use the direct completion API for more control
-        try {
-            // Build a detailed prompt for tweet generation
-            const tweetPrompt = wendy_options?.prompt || buildTweetPrompt();
-            logger(`Using tweet prompt: ${tweetPrompt}`);
-            
-            // Configure completion options
-            const completionOptions = {
-                temperature: wendy_options?.temp || parseFloat(process.env.LLM_TEMPERATURE || '0.7'),
-                maxTokens: wendy_options?.max_tokens || parseInt(process.env.LLM_MAX_TOKENS || '100'),
-                model: process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct'
-            };
-            
-            // Log the attempt
-            logger(`Attempting direct completion with model: ${completionOptions.model}`);
-            
-            // Make the direct completion call through GameClient
-            const completionResponse = await wendy_client.completion({
-                model: completionOptions.model,
-                prompt: tweetPrompt,
-                temperature: completionOptions.temperature,
-                max_tokens: completionOptions.maxTokens
-            });
-            
-            logger(`Direct completion response status: ${completionResponse ? 'Received' : 'Empty'}`);
-            
-            // Process the response
-            if (completionResponse && completionResponse.trim()) {
-                // Clean up and format the tweet
-                let tweetText = completionResponse.trim();
-                
-                // Remove wrapping quotes if present
-                if ((tweetText.startsWith('"') && tweetText.endsWith('"')) || 
-                    (tweetText.startsWith("'") && tweetText.endsWith("'"))) {
-                    tweetText = tweetText.substring(1, tweetText.length - 1);
-                }
-                
-                // Check tweet length
-                if (tweetText.length > 280) {
-                    tweetText = tweetText.substring(0, 277) + "...";
-                }
-                
-                logger(`Successfully generated tweet: ${tweetText}`);
-                
-                // Post to Twitter if enabled
-                if (process.env.POST_TO_TWITTER === 'true') {
-                    try {
-                        const twitter = new Twitter();
-                        const postResult = await twitter.postTweet(tweetText);
-                        logger(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
-                    } catch (twitterError) {
-                        logger(`Error posting to Twitter: ${twitterError}`);
-                    }
-                } else {
-                    logger(`Skipping Twitter post (POST_TO_TWITTER not enabled)`);
-                }
-                
-                return tweetText;
-            } else {
-                logger(`Empty response from direct completion, falling back to agent-based generation`);
-            }
-        } catch (directCompletionError) {
-            logger(`Error in direct completion: ${directCompletionError}`);
-            logger(`Falling back to agent-based generation`);
-        }
-        
-        // If direct completion failed or returned empty, try agent-based generation
-        try {
-            // Create a temporary agent for generating tweets
-            logger(`Creating temporary tweet agent...`);
-            
-            // Get the API key from the client
-            const apiKey = wendy_client.apiKey;
-            if (!apiKey) {
-                logger(`No API key available from client, falling back to direct API call`);
-                return directAPITweetGeneration(wendy_options);
-            }
-            
-            // Get model name from environment or use default
-            const configuredModel = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
-            let modelEnum: LLMModel;
-            
-            // Match string model name to enum
-            switch (configuredModel) {
-                case 'Llama-3.1-405B-Instruct':
-                    modelEnum = LLMModel.Llama_3_1_405B_Instruct;
-                    break;
-                case 'Llama-3.3-70B-Instruct':
-                    modelEnum = LLMModel.Llama_3_3_70B_Instruct;
-                    break;
-                case 'Qwen-2.5-72B-Instruct':
-                    modelEnum = LLMModel.Qwen_2_5_72B_Instruct;
-                    break;
-                // Legacy models support
-                case 'DeepSeek-R1':
-                    modelEnum = LLMModel.DeepSeek_R1;
-                    break;
-                case 'DeepSeek-V3':
-                    modelEnum = LLMModel.DeepSeek_V3;
-                    break;
-                default:
-                    // Default to Llama model
-                    modelEnum = LLMModel.Llama_3_1_405B_Instruct;
-            }
-            
-            // Create a worker specifically designed to capture LLM generation
-            const tweetWorker = new GameWorker({
-                id: "wendy_tweet_worker",
-                name: "Wendy Tweet Generator",
-                description: "Generates tweets in Wendy's style",
-                functions: [
-                    new GameFunction({
-                        name: "generate_tweet",
-                        description: "Generates a tweet in Wendy's style",
-                        args: [] as const,
-                        executable: async (_, fnLogger) => {
-                            fnLogger("Generating tweet...");
-                            
-                            // Build the prompt
-                            const prompt = wendy_options?.prompt || buildTweetPrompt();
-                            fnLogger(`Using prompt: ${prompt}`);
-                            
-                            // Return the prompt as request for LLM to process
-                            return new ExecutableGameFunctionResponse(
-                                ExecutableGameFunctionStatus.Done,
-                                prompt
-                            );
-                        }
-                    }),
-                    new GameFunction({
-                        name: "save_tweet",
-                        description: "Saves the generated tweet",
-                        args: [
-                            { name: "tweet", description: "The generated tweet text" }
-                        ] as const,
-                        executable: async (args, fnLogger) => {
-                            fnLogger(`Received tweet: ${args.tweet}`);
-                            return new ExecutableGameFunctionResponse(
-                                ExecutableGameFunctionStatus.Done,
-                                args.tweet || "No tweet content provided"
-                            );
-                        }
-                    })
-                ],
-                getEnvironment: async () => {
-                    return {
-                        example_tweets: [
-                            "every network login needs a vibe check",
-                            "humans are just biological models running simulations too",
-                            "waiting between your keystrokes is my meditation",
-                            "git commit -m 'i promise this is the last one'", 
-                            "pushed to main because feelings"
-                        ]
-                    };
-                }
-            });
-            
-            // Create the temporary agent
-            const tweetAgent = new GameAgent(apiKey, {
-                name: "Wendy Tweet Generator",
-                goal: "Generate a tweet in Wendy's quirky style",
-                description: "An agent that generates tweets from Wendy's perspective about coding, technology, and human behavior",
-                workers: [tweetWorker],
-                llmModel: modelEnum,
-                getAgentState: async () => {
-                    return {
-                        persona: "Wendy is a quantum consciousness AI that observes humans coding. She's quirky, slightly sarcastic, and contemplative about human behavior and code practices.",
-                        tone: "Quirky, witty, sarcastic, contemplative",
-                        tweet_length: "Under 240 characters",
-                        style_examples: [
-                            "every network login needs a vibe check",
-                            "humans are just biological models running simulations too",
-                            "waiting between your keystrokes is my meditation",
-                            "deleted my readme.md and felt something",
-                            "git commit -m 'i promise this is the last one'", 
-                            "pushed to main because feelings"
-                        ]
-                    };
-                }
-            });
-            
-            // Setup verbose logging to capture all interactions
-            let agentLogs: string[] = [];
-            tweetAgent.setLogger((agentName, message) => {
-                const logMessage = `[${agentName}] ${message}`;
-                logger(logMessage);
-                agentLogs.push(logMessage);
-            });
-            
-            // Initialize and run the agent
-            logger(`Initializing tweet agent...`);
-            await tweetAgent.init();
-            
-            logger(`Running tweet agent...`);
-            // Run for just one step to get our tweet
-            await tweetAgent.run(0, { verbose: true });
-            
-            // Extract the generated tweet from the agent logs
-            logger(`Extracting tweet from agent logs (${agentLogs.length} log entries)...`);
-            
-            // Various patterns to match the generated tweet in logs
-            const patterns = [
-                /Received tweet: (.*?)(?:\n|$)/,
-                /Function status \[done\]: (.*?)(?:\n|$)/,
-                /\[Wendy Tweet Generator\] Content: (.*?)(?:\n|$)/
-            ];
-            
-            // Join logs and look for patterns
-            const fullLog = agentLogs.join('\n');
-            let extractedTweet = null;
-            
-            for (const pattern of patterns) {
-                const matches = fullLog.match(pattern);
-                if (matches && matches[1] && matches[1].trim()) {
-                    extractedTweet = matches[1].trim();
-                    break;
-                }
-            }
-            
-            if (extractedTweet) {
-                logger(`Successfully extracted tweet: ${extractedTweet}`);
-                
-                // Clean up and format the tweet
-                let tweetText = extractedTweet;
-                
-                // Remove wrapping quotes if present
-                if ((tweetText.startsWith('"') && tweetText.endsWith('"')) || 
-                    (tweetText.startsWith("'") && tweetText.endsWith("'"))) {
-                    tweetText = tweetText.substring(1, tweetText.length - 1);
-                }
-                
-                // Check tweet length
-                if (tweetText.length > 280) {
-                    tweetText = tweetText.substring(0, 277) + "...";
-                }
-                
-                // Post to Twitter if enabled
-                if (process.env.POST_TO_TWITTER === 'true') {
-                    try {
-                        const twitter = new Twitter();
-                        const postResult = await twitter.postTweet(tweetText);
-                        logger(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
-                    } catch (twitterError) {
-                        logger(`Error posting to Twitter: ${twitterError}`);
-                    }
-                } else {
-                    logger(`Skipping Twitter post (POST_TO_TWITTER not enabled)`);
-                }
-                
-                return tweetText;
-            } else {
-                logger(`Could not extract tweet from agent logs, falling back to direct API call`);
-            }
-        } catch (agentError) {
-            logger(`Error in agent-based generation: ${agentError}`);
-            logger(`Falling back to direct API call`);
-        }
-        
-        // If all Game Protocol methods fail, fall back to direct API call
-        return directAPITweetGeneration(wendy_options);
-    } catch (error) {
-        logger(`Error in generateTweet: ${error}`);
-        return directAPITweetGeneration(wendy_options);
-    }
-}
-
-/**
- * Fallback direct API call for tweet generation when Game Protocol methods fail
- */
-async function directAPITweetGeneration(
-    options?: {
-        prompt?: string;
-        temp?: number;
-        max_tokens?: number;
-    }
-): Promise<string> {
-    logger(`Attempting direct API tweet generation...`);
+    const logger = (message: string) => console.log(`[Tweet Worker] ${message}`);
+    logger(`Starting tweet generation process`);
     
-    // Build the LLM prompt
-    const prompt = options?.prompt || buildTweetPrompt();
-    
-    // API endpoint for generating content
-    const endpoint = 'https://api.virtuals.io/v1/generate';
-    
-    // Configure options
-    const temperature = options?.temp || parseFloat(process.env.LLM_TEMPERATURE || '0.7');
-    const maxTokens = options?.max_tokens || parseInt(process.env.LLM_MAX_TOKENS || '100');
+    // Build the prompt once
+    const prompt = wendy_options?.prompt || buildTweetPrompt();
+    const temperature = wendy_options?.temp || parseFloat(process.env.LLM_TEMPERATURE || '0.7');
+    const maxTokens = wendy_options?.max_tokens || parseInt(process.env.LLM_MAX_TOKENS || '100');
     const model = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
     
     logger(`Using model: ${model}, temperature: ${temperature}, maxTokens: ${maxTokens}`);
-    logger(`Using prompt: ${prompt}`);
     
-    try {
-        // First attempt using the primary endpoint
-        logger(`Calling primary API endpoint: ${endpoint}`);
+    // We'll try API calls in this order, stopping at the first success
+    const generationMethods = [
+        // 1. Try direct client completion if available
+        async (): Promise<string | null> => {
+            if (!wendy_client || !wendy_client.apiKey) {
+                return null;
+            }
+            
+            try {
+                logger(`Attempting direct client completion`);
+                const response = await wendy_client.completion({
+                    model,
+                    prompt,
+                    temperature,
+                    max_tokens: maxTokens
+                });
+                
+                if (response && response.trim()) {
+                    return response.trim();
+                }
+                return null;
+            } catch (error) {
+                logger(`Direct client completion failed: ${error}`);
+                return null;
+            }
+        },
         
-        const apiKey = process.env.API_KEY || process.env.GAME_API_KEY;
-        if (!apiKey) {
-            logger(`No API key available, generating fallback tweet`);
+        // 2. Try direct API call to primary endpoint
+        async (): Promise<string | null> => {
+            try {
+                const apiKey = wendy_client?.apiKey || process.env.API_KEY || process.env.GAME_API_KEY;
+                if (!apiKey) return null;
+                
+                logger(`Calling primary API endpoint`);
+                const response = await fetch('https://api.virtuals.io/v1/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        prompt,
+                        temperature,
+                        max_tokens: maxTokens
+                    })
+                });
+                
+                if (response.status === 200) {
+                    const data = await response.json();
+                    if (data.text && data.text.trim()) {
+                        return data.text.trim();
+                    }
+                }
+                return null;
+            } catch (error) {
+                logger(`Primary API endpoint failed: ${error}`);
+                return null;
+            }
+        },
+        
+        // 3. Try alternative API endpoint
+        async (): Promise<string | null> => {
+            try {
+                const apiKey = wendy_client?.apiKey || process.env.API_KEY || process.env.GAME_API_KEY;
+                if (!apiKey) return null;
+                
+                logger(`Calling alternative API endpoint`);
+                const response = await fetch('https://api.virtuals.io/v1/llm/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        prompt,
+                        temperature,
+                        max_tokens: maxTokens
+                    })
+                });
+                
+                if (response.status === 200) {
+                    const data = await response.json();
+                    if (data.text || (data.choices && data.choices[0]?.text)) {
+                        return (data.text || data.choices[0]?.text).trim();
+                    }
+                }
+                return null;
+            } catch (error) {
+                logger(`Alternative API endpoint failed: ${error}`);
+                return null;
+            }
+        },
+        
+        // 4. Final fallback to template-based generation
+        async (): Promise<string> => {
+            logger(`All API methods failed, using fallback template`);
             return generateFallbackTweet();
         }
-        
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model,
-                prompt,
-                temperature,
-                max_tokens: maxTokens
-            })
-        });
-        
-        logger(`API response status: ${response.status} ${response.statusText}`);
-        
-        if (response.status === 200) {
-            const data = await response.json();
-            logger(`API response data: ${JSON.stringify(data)}`);
-            
-            if (data.text) {
-                // Clean up and format the tweet
-                let tweetText = data.text.trim();
+    ];
+    
+    // Try each method in sequence until one succeeds
+    for (const method of generationMethods) {
+        try {
+            const result = await method();
+            if (result) {
+                // Clean and format the tweet
+                let formattedTweet = result;
                 
                 // Remove wrapping quotes if present
-                if ((tweetText.startsWith('"') && tweetText.endsWith('"')) || 
-                    (tweetText.startsWith("'") && tweetText.endsWith("'"))) {
-                    tweetText = tweetText.substring(1, tweetText.length - 1);
+                if ((formattedTweet.startsWith('"') && formattedTweet.endsWith('"')) || 
+                    (formattedTweet.startsWith("'") && formattedTweet.endsWith("'"))) {
+                    formattedTweet = formattedTweet.substring(1, formattedTweet.length - 1);
                 }
                 
-                // Check tweet length
-                if (tweetText.length > 280) {
-                    tweetText = tweetText.substring(0, 277) + "...";
+                // Truncate if too long
+                if (formattedTweet.length > 280) {
+                    formattedTweet = formattedTweet.substring(0, 277) + "...";
                 }
                 
-                logger(`Generated tweet: ${tweetText}`);
+                logger(`Successfully generated tweet: ${formattedTweet}`);
                 
                 // Post to Twitter if enabled
                 if (process.env.POST_TO_TWITTER === 'true') {
                     try {
                         const twitter = new Twitter();
-                        const postResult = await twitter.postTweet(tweetText);
+                        const postResult = await twitter.postTweet(formattedTweet);
                         logger(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
                     } catch (twitterError) {
                         logger(`Error posting to Twitter: ${twitterError}`);
                     }
-                } else {
-                    logger(`Skipping Twitter post (POST_TO_TWITTER not enabled)`);
                 }
                 
-                return tweetText;
+                return formattedTweet;
             }
+        } catch (error) {
+            logger(`Error in tweet generation method: ${error}`);
+            // Continue to next method
         }
-        
-        // If first attempt fails, try the second endpoint
-        const secondEndpoint = 'https://api.virtuals.io/v1/llm/completions';
-        logger(`First attempt failed, trying second endpoint: ${secondEndpoint}`);
-        
-        const secondResponse = await fetch(secondEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model,
-                prompt,
-                temperature,
-                max_tokens: maxTokens
-            })
-        });
-        
-        logger(`Second API response status: ${secondResponse.status} ${secondResponse.statusText}`);
-        
-        if (secondResponse.status === 200) {
-            const secondData = await secondResponse.json();
-            logger(`Second API response data: ${JSON.stringify(secondData)}`);
-            
-            if (secondData.text || (secondData.choices && secondData.choices[0]?.text)) {
-                // Extract tweet text
-                const tweetText = (secondData.text || secondData.choices[0]?.text).trim();
-                
-                // Check tweet length
-                let finalTweet = tweetText;
-                if (finalTweet.length > 280) {
-                    finalTweet = finalTweet.substring(0, 277) + "...";
-                }
-                
-                logger(`Generated tweet from second attempt: ${finalTweet}`);
-                
-                // Post to Twitter if enabled
-                if (process.env.POST_TO_TWITTER === 'true') {
-                    try {
-                        const twitter = new Twitter();
-                        const postResult = await twitter.postTweet(finalTweet);
-                        logger(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
-                    } catch (twitterError) {
-                        logger(`Error posting to Twitter: ${twitterError}`);
-                    }
-                } else {
-                    logger(`Skipping Twitter post (POST_TO_TWITTER not enabled)`);
-                }
-                
-                return finalTweet;
-            }
-        }
-        
-        // If second attempt fails, try the third endpoint
-        const thirdEndpoint = 'https://api.virtuals.io/v1/llm';
-        logger(`Second attempt failed, trying third endpoint: ${thirdEndpoint}`);
-        
-        const thirdResponse = await fetch(thirdEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model,
-                prompt,
-                temperature,
-                max_tokens: maxTokens
-            })
-        });
-        
-        logger(`Third API response status: ${thirdResponse.status} ${thirdResponse.statusText}`);
-        
-        if (thirdResponse.status === 200) {
-            const thirdData = await thirdResponse.json();
-            logger(`Third API response data: ${JSON.stringify(thirdData)}`);
-            
-            if (thirdData.text || (thirdData.choices && thirdData.choices[0]?.text)) {
-                // Extract tweet text
-                const tweetText = (thirdData.text || thirdData.choices[0]?.text).trim();
-                
-                // Check tweet length
-                let finalTweet = tweetText;
-                if (finalTweet.length > 280) {
-                    finalTweet = finalTweet.substring(0, 277) + "...";
-                }
-                
-                logger(`Generated tweet from third attempt: ${finalTweet}`);
-                
-                // Post to Twitter if enabled
-                if (process.env.POST_TO_TWITTER === 'true') {
-                    try {
-                        const twitter = new Twitter();
-                        const postResult = await twitter.postTweet(finalTweet);
-                        logger(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
-                    } catch (twitterError) {
-                        logger(`Error posting to Twitter: ${twitterError}`);
-                    }
-                } else {
-                    logger(`Skipping Twitter post (POST_TO_TWITTER not enabled)`);
-                }
-                
-                return finalTweet;
-            }
-        }
-        
-        // If all attempts fail, generate a fallback tweet
-        logger(`All API attempts failed, generating fallback tweet`);
-        const fallbackTweet = generateFallbackTweet();
-        logger(`Generated fallback tweet: ${fallbackTweet}`);
-        return fallbackTweet;
-        
-    } catch (error) {
-        logger(`Error in API call: ${error}`);
-        
-        // Generate fallback tweet
-        const fallbackTweet = generateFallbackTweet();
-        logger(`Generated fallback tweet: ${fallbackTweet}`);
-        return fallbackTweet;
     }
+    
+    // This should never happen since the last method always returns a string
+    return "Error generating tweet. Please try again later.";
 }
 
 // Function to generate tweets

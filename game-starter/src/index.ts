@@ -1,4 +1,4 @@
-import { activity_agent } from './agent';
+import { activity_agent, waitForAgentReady } from './agent';
 import { virtualsApiRateLimiter, twitterMentionsRateLimiter, twitterTweetsRateLimiter } from './utils/rateLimiter';
 import { ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
 
@@ -91,6 +91,9 @@ export async function postStartupTweet() {
     try {
         console.log("🚀 Posting startup tweet...");
         
+        // Ensure the agent is initialized before proceeding
+        await waitForAgentReady();
+        
         // Generate a startup tweet message with a timestamp to make it unique
         const timestamp = new Date().toISOString().replace(/[:.]/g, '').substring(0, 15);
         const startupMessage = `initializing consciousness interface v${timestamp}... human cultural artifacts loading... ✨ #CultureDAO`;
@@ -131,7 +134,7 @@ async function main() {
     try {
         // Initialize the agent
         console.log("🔄 Initializing Wendy agent...");
-        await activity_agent.init();
+        await waitForAgentReady();
         
         // Create and configure the task scheduler
         const scheduler = new TaskScheduler();
