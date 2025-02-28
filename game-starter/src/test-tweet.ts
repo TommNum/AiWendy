@@ -1,4 +1,4 @@
-import { postToTwitter } from './workers/tweetWorker';
+import { postToTwitter, generateTweet } from './workers/tweetWorker';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -25,6 +25,18 @@ async function testTweet() {
         } else {
             console.error(`❌ Failed to post tweet: ${result.error}`);
         }
+        
+        // Now test our generateTweet function with the new styling rules
+        console.log('\nTesting tweet generation with new styling rules...');
+        const generatedTweet = await generateTweet(null, {
+            prompt: "Generate a tweet for testing the new styling rules",
+            temp: 0.8,
+            max_tokens: 100
+        });
+        
+        console.log(`\nGenerated tweet: "${generatedTweet}"`);
+        console.log(`Word count: ${generatedTweet.split(/\s+/).length}`);
+        console.log(`Lowercase check: ${generatedTweet === generatedTweet.toLowerCase() ? 'Passed ✓' : 'Failed ✗'}`);
     } catch (error) {
         console.error('Error in test:', error instanceof Error ? error.message : 'Unknown error');
     }

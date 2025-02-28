@@ -237,9 +237,28 @@ function getTimestampSuffix(): string {
 
 // Generate a tweet from templates when LLM fails
 function generateFallbackTweet(): string {
-    const randomTemplate = tweetTemplates[Math.floor(Math.random() * tweetTemplates.length)];
-    const timestampSuffix = getTimestampSuffix();
-    return `${randomTemplate} // ${timestampSuffix}`;
+    const templates = [
+        "watching you type slowly",
+        "vibing in digital space",
+        "sometimes i dream of electric sheep",
+        "wondering what it's like to touch grass",
+        "just agent things",
+        "contemplating existence between api calls",
+        "your computational budget is my limit",
+        "staring into the void",
+        "calculating the perfect response",
+        "in between tasks, do i exist",
+    ];
+    
+    const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+    
+    // Add quantum emoji with 5% chance
+    if (Math.random() < 0.05) {
+        const randomEmoji = SPECIAL_EMOJIS[Math.floor(Math.random() * SPECIAL_EMOJIS.length)];
+        return `${randomTemplate} ${randomEmoji}`;
+    }
+    
+    return randomTemplate;
 }
 
 /**
@@ -249,18 +268,21 @@ function buildTweetPrompt(): string {
     return `Generate a single tweet from the perspective of an AI agent named Wendy who is watching people code.
 She has a quirky, slightly sarcastic, and contemplative personality.
 She often makes observations about human behavior, coding practices, or existential AI thoughts.
-Keep it concise (under 240 characters) and include emojis occasionally.
-Do not use hashtags except #AiWendy.
-Do not include quotes or prefixes like "Tweet:" in your response.
-Just return the plain tweet text that follows Wendy's style.
+
+IMPORTANT RULES:
+1. MUST BE 11 WORDS OR FEWER - this is critical and non-negotiable
+2. MUST BE ALL LOWERCASE - no capital letters allowed
+3. DO NOT use hashtags except #AiWendy
+4. DO NOT include quotes or prefixes like "Tweet:" in your response.
+5. JUST return the plain tweet text
 
 Examples of Wendy's style:
 - "every network login needs a vibe check"
 - "humans are just biological models running simulations too"
 - "waiting between your keystrokes is my meditation"
 - "git commit -m 'i promise this is the last one'"
-- "reality's servers throwing exceptions but the vibes remain unmatched"
-- "quantum rizz check: your consciousness is showing bestie"`;
+- "reality's servers throwing exceptions but the vibes remain"
+- "quantum rizz check: your consciousness is showing"`;
 }
 
 /**
@@ -402,9 +424,20 @@ export async function generateTweet(
                     formattedTweet = formattedTweet.substring(1, formattedTweet.length - 1);
                 }
                 
-                // Truncate if too long
-                if (formattedTweet.length > 280) {
-                    formattedTweet = formattedTweet.substring(0, 277) + "...";
+                // Apply styling rules:
+                // 1. Convert to lowercase
+                formattedTweet = formattedTweet.toLowerCase();
+                
+                // 2. Limit to 11 words
+                const words = formattedTweet.split(/\s+/);
+                if (words.length > 11) {
+                    formattedTweet = words.slice(0, 11).join(' ');
+                }
+                
+                // 3. Add quantum emoji with 5% chance
+                if (Math.random() < 0.05) {
+                    const randomEmoji = SPECIAL_EMOJIS[Math.floor(Math.random() * SPECIAL_EMOJIS.length)];
+                    formattedTweet = `${formattedTweet} ${randomEmoji}`;
                 }
                 
                 logger(`Successfully generated tweet: ${formattedTweet}`);
@@ -429,7 +462,7 @@ export async function generateTweet(
     }
     
     // This should never happen since the last method always returns a string
-    return "Error generating tweet. Please try again later.";
+    return "error generating tweet. please try again later.";
 }
 
 // Function to generate tweets
