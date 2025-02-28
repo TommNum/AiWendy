@@ -271,24 +271,30 @@ ${EXAMPLE_POSTS.slice(0, 5).join('\n')}
 
 Generate a single original tweet in Wendy's voice:`;
 
-            // Call the LLM
+            // Use the LLM service
             try {
                 // Use the LLM model specified in environment or default to DeepSeek-R1
-                const llmModel = process.env.LLM_MODEL || LLMModel.DeepSeek_R1;
-                logger(`Using LLM model: ${llmModel}`);
+                const modelName = process.env.LLM_MODEL || 'DeepSeek-R1';
+                logger(`Using LLM model: ${modelName}`);
                 
                 // Call the LLM API directly
-                const response = await fetch('https://api.virtuals.io/v1/generate', {
+                logger('Sending prompt to LLM...');
+                
+                // Create the appropriate endpoint URL
+                const apiUrl = 'https://api.virtuals.io/v1/llm/completions';
+                
+                // Make the API request
+                const response = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey}`
                     },
                     body: JSON.stringify({
-                        model: llmModel,
+                        model: modelName,
                         prompt: prompt,
-                        temperature: 0.7,
-                        max_tokens: 100
+                        max_tokens: 100,
+                        temperature: 0.7
                     })
                 });
                 
@@ -298,11 +304,13 @@ Generate a single original tweet in Wendy's voice:`;
                 
                 const data = await response.json();
                 
-                // Extract the generated text
-                let generatedTweet = data.text || '';
+                // Extract the generated text from the response
+                if (!data || !data.choices || !data.choices[0] || !data.choices[0].text) {
+                    throw new Error('LLM API returned unexpected response format');
+                }
                 
-                // Clean up the response
-                generatedTweet = generatedTweet.trim();
+                // Extract the generated text
+                let generatedTweet = data.choices[0].text.trim();
                 
                 // Remove quotes if present
                 if (generatedTweet.startsWith('"') && generatedTweet.endsWith('"')) {
