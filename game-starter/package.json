@@ -9,7 +9,8 @@
     "plugin": "node dist/plugins/example.js",
     "dev": "ts-node src/index.ts",
     "watch": "tsc --watch",
-    "test:llm": "ts-node src/test-llm-integration.ts"
+    "test:llm": "ts-node src/test-llm-integration.ts",
+    "test:direct-llm": "ts-node src/test-direct-llm.ts"
   },
   "keywords": [],
   "author": "",

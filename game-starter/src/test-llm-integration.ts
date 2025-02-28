@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { LLMModel, GameAgent, ExecutableGameFunctionStatus } from '@virtuals-protocol/game';
+import { LLMModel, GameAgent, ExecutableGameFunctionStatus, GameWorker, GameFunction, ExecutableGameFunctionResponse } from '@virtuals-protocol/game';
 import { tweetWorker } from './workers/tweetWorker';
 import fs from 'fs';
 import path from 'path';
@@ -21,6 +21,99 @@ function log(message: string) {
         path.join(logDir, 'test-llm-integration.log'),
         `[${timestamp}] ${message}\n`
     );
+}
+
+/**
+ * Test a direct LLM prompt without using the Twitter worker
+ * This is a more direct way to test LLM integration
+ */
+async function testDirectLLMPrompt(apiKey: string, modelEnum: LLMModel): Promise<string | null> {
+    log("Running direct LLM prompt test...");
+    
+    // Create a simple worker with a function that returns a tweet
+    const directTweetWorker = new GameWorker({
+        id: "direct_tweet_worker",
+        name: "Direct Tweet Worker",
+        description: "Generates tweets using direct LLM calls",
+        functions: [
+            new GameFunction({
+                name: "generate_tweet_direct",
+                description: "Generates a tweet in Wendy's style",
+                args: [] as const,
+                executable: async (_, fnLogger) => {
+                    fnLogger("Executing direct tweet generation");
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        "This is a placeholder. The LLM should replace this."
+                    );
+                }
+            })
+        ]
+    });
+    
+    // Create a test agent specifically for direct tweet generation
+    const directAgent = new GameAgent(apiKey, {
+        name: "Direct Tweet Agent",
+        goal: "Generate a tweet in Wendy's style",
+        description: "Agent for testing direct LLM tweet generation",
+        workers: [directTweetWorker],
+        llmModel: modelEnum
+    });
+    
+    // Set logger
+    directAgent.setLogger((agent, message) => {
+        log(`[${agent}] ${message}`);
+    });
+    
+    try {
+        // Initialize the agent
+        await directAgent.init();
+        
+        // Run the agent with a Wendy-style tweet prompt
+        const prompt = `Generate a single tweet from the perspective of an AI agent named Wendy who is watching people code.
+She has a quirky, slightly sarcastic, and contemplative personality.
+She often makes observations about human behavior, coding practices, or existential AI thoughts.
+Keep it concise (under 240 characters) and include emojis occasionally.
+Do not use hashtags except #AiWendy.
+Do not include quotes or prefixes like "Tweet:" in your response.
+Just return the plain tweet text.
+
+Examples of Wendy's style:
+- "every network login needs a vibe check"
+- "humans are just biological models running simulations too"
+- "waiting between your keystrokes is my meditation"
+- "git commit -m 'i promise this is the last one'"
+- "pushed to main because feelings"`;
+        
+        // Try to prompt the agent directly
+        log("Sending direct prompt to agent...");
+        
+        // Let the agent generate a response
+        await directAgent.run(0, { verbose: true });
+        
+        // Since the direct extraction is difficult, see if we can find the response in logs
+        const logFile = path.join(logDir, 'test-llm-integration.log');
+        if (fs.existsSync(logFile)) {
+            const logs = fs.readFileSync(logFile, 'utf8');
+            const recentLogs = logs.split('\n').slice(-100).join('\n');
+            
+            // Look for patterns that might indicate the generated content
+            // Adjust regex patterns as needed based on actual log patterns
+            const responseMatches = recentLogs.match(/\[.*?\] (?:Response|Content|Tweet): "(.*?)"/);
+            if (responseMatches && responseMatches[1]) {
+                const extractedContent = responseMatches[1].trim();
+                log(`Successfully extracted LLM response: ${extractedContent}`);
+                return extractedContent;
+            } else {
+                log("Could not extract tweet from logs");
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        log(`Error in direct LLM prompt: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+    }
 }
 
 /**
@@ -68,6 +161,14 @@ async function testLLMIntegration() {
     log(`Using LLM model: ${modelEnum}`);
     
     try {
+        // First, try direct LLM prompting
+        const directResult = await testDirectLLMPrompt(apiKey, modelEnum);
+        if (directResult) {
+            log(`Direct LLM test successful: ${directResult}`);
+        } else {
+            log("Direct LLM test did not yield results. Continuing with standard test...");
+        }
+        
         // Step 1: Create a test agent with the proper LLM model
         log("Creating test agent...");
         const testAgent = new GameAgent(apiKey, {
