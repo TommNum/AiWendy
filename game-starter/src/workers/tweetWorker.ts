@@ -1,9 +1,6 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
-import crypto from 'crypto';
-import OAuth from 'oauth-1.0a';
 import { 
     GameWorker, 
     GameFunction, 
@@ -13,92 +10,86 @@ import {
     GameAgent
 } from "@virtuals-protocol/game";
 import { twitterTweetsRateLimiter } from '../utils/rateLimiter';
+// Import the twitter-api-v2 library directly
+import TwitterApi, {
+    TweetV2PostTweetResult,
+    TweetSearchRecentV2Paginator,
+    TweetV2LikeResult,
+    UserV2Result,
+} from "twitter-api-v2";
 
 dotenv.config();
 
-// Twitter utility class for posting tweets
-class Twitter {
-    private consumerKey: string;
-    private consumerSecret: string;
-    private accessToken: string;
-    private accessSecret: string;
-    private oauth: OAuth;
+// Define the interface for a tweet client (based on the original ITweetClient)
+interface ITweetClient {
+    post(tweet: string, mediaId?: string): Promise<TweetV2PostTweetResult>;
+    search(query: string): Promise<TweetSearchRecentV2Paginator["data"]>;
+    reply(
+        tweet_id: string,
+        reply: string,
+        mediaId?: string
+    ): Promise<TweetV2PostTweetResult>;
+    like(tweet_id: string): Promise<TweetV2LikeResult>;
+    quote(
+        tweet_id: string,
+        quote: string,
+        mediaId?: string
+    ): Promise<TweetV2PostTweetResult>;
+    me(): Promise<UserV2Result>;
+}
 
-    constructor() {
-        this.consumerKey = process.env.TWITTER_API_KEY || '';
-        this.consumerSecret = process.env.TWITTER_API_SECRET || '';
-        this.accessToken = process.env.TWITTER_ACCESS_TOKEN || '';
-        this.accessSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET || '';
-
-        if (!this.consumerKey || !this.consumerSecret || !this.accessToken || !this.accessSecret) {
-            throw new Error('Twitter API credentials missing');
-        }
-        
-        // Initialize OAuth
-        this.oauth = new OAuth({
-            consumer: {
-                key: this.consumerKey,
-                secret: this.consumerSecret
-            },
-            signature_method: 'HMAC-SHA1',
-            hash_function(base_string, key) {
-                return crypto.createHmac('sha1', key).update(base_string).digest('base64');
-            }
+// Simple Twitter client class based on the twitterClient.ts implementation
+class TwitterClient implements ITweetClient {
+    private twitterClient: TwitterApi;
+    
+    constructor(credential: {
+        apiKey: string;
+        apiSecretKey: string;
+        accessToken: string;
+        accessTokenSecret: string;
+    }) {
+        this.twitterClient = new TwitterApi({
+            appKey: credential.apiKey,
+            appSecret: credential.apiSecretKey,
+            accessToken: credential.accessToken,
+            accessSecret: credential.accessTokenSecret,
         });
     }
-
-    async postTweet(text: string) {
-        try {
-            // For development/testing, return mock response
-            if (process.env.NODE_ENV !== 'production') {
-                console.log(`[MOCK] Posting tweet: ${text}`);
-                return {
-                    data: {
-                        id: `mock-${Date.now()}`,
-                        text
-                    }
-                };
-            }
-            
-            // In production, post to the actual Twitter API
-            console.log(`[TWITTER] Posting real tweet: ${text}`);
-            
-            const url = 'https://api.twitter.com/2/tweets';
-            const method = 'POST';
-            const data = { text };
-            
-            // Get the authorization header
-            const authorization = this.oauth.toHeader(
-                this.oauth.authorize(
-                    {
-                        url,
-                        method,
-                        data
-                    },
-                    {
-                        key: this.accessToken,
-                        secret: this.accessSecret
-                    }
-                )
-            );
-            
-            // Make the API request
-            const response = await axios.post(url, data, {
-                headers: {
-                    ...authorization,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            console.log(`[TWITTER] Tweet posted successfully with ID: ${response.data?.data?.id}`);
-            return response.data;
-        } catch (error) {
-            console.error('[TWITTER] Error posting tweet:', error instanceof Error ? error.message : 'Unknown error');
-            if (axios.isAxiosError(error) && error.response) {
-                console.error('[TWITTER] API response:', error.response.status, error.response.data);
-            }
-            throw error;
-        }
+    
+    get client() {
+        return this.twitterClient;
+    }
+    
+    post(tweet: string): Promise<TweetV2PostTweetResult> {
+        return this.twitterClient.v2.tweet(tweet);
+    }
+    
+    async search(query: string): Promise<TweetSearchRecentV2Paginator["data"]> {
+        const response = await this.twitterClient.v2.search(query, {
+            max_results: 10,
+            "tweet.fields": ["public_metrics"],
+        });
+        
+        return response.data;
+    }
+    
+    reply(tweet_id: string, reply: string): Promise<TweetV2PostTweetResult> {
+        return this.twitterClient.v2.reply(reply, tweet_id);
+    }
+    
+    async like(tweet_id: string): Promise<TweetV2LikeResult> {
+        const me = await this.twitterClient.v2.me();
+        return this.twitterClient.v2.like(me.data.id, tweet_id);
+    }
+    
+    quote(tweet_id: string, quote: string): Promise<TweetV2PostTweetResult> {
+        return this.twitterClient.v2.quote(quote, tweet_id);
+    }
+    
+    me(): Promise<UserV2Result> {
+        return this.twitterClient.v2.me({
+            "user.fields": ["public_metrics"],
+        });
     }
 }
 
@@ -233,9 +224,6 @@ interface GameClient {
 // Function that posts to Twitter and returns results
 export async function postToTwitter(tweetText: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-        // Create Twitter instance
-        const twitter = new Twitter();
-        
         // Check if we can tweet
         if (!twitterTweetsRateLimiter.canTweet()) {
             const timeUntilNextTweet = twitterTweetsRateLimiter.timeUntilNextTweet();
@@ -246,21 +234,56 @@ export async function postToTwitter(tweetText: string): Promise<{ success: boole
             };
         }
         
-        // Post the tweet
         logger(`Posting tweet: ${tweetText}`);
-        const result = await twitter.postTweet(tweetText);
         
-        // Mark the tweet as posted for rate limiting
-        twitterTweetsRateLimiter.markTweet();
+        // Create TwitterClient instance using twitter-api-v2
+        const twitterClient = new TwitterClient({
+            apiKey: process.env.TWITTER_API_KEY || '',
+            apiSecretKey: process.env.TWITTER_API_SECRET || '',
+            accessToken: process.env.TWITTER_ACCESS_TOKEN || '',
+            accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET || ''
+        });
         
-        // Return success
-        return {
-            success: true,
-            data: result
-        };
+        // Post the tweet using the proper client
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[MOCK] Posting tweet: ${tweetText}`);
+            
+            // Mark the tweet as posted for rate limiting
+            twitterTweetsRateLimiter.markTweet();
+            
+            return {
+                success: true,
+                data: {
+                    data: {
+                        id: `mock-${Date.now()}`,
+                        text: tweetText
+                    }
+                }
+            };
+        } else {
+            console.log(`[TWITTER] Posting real tweet: ${tweetText}`);
+            const result = await twitterClient.post(tweetText);
+            
+            // Mark the tweet as posted for rate limiting
+            twitterTweetsRateLimiter.markTweet();
+            
+            console.log(`[TWITTER] Tweet posted successfully with ID: ${result.data.id}`);
+            
+            // Save the tweet timestamp
+            saveTweetHistory(new Date().toISOString());
+            
+            return {
+                success: true,
+                data: result
+            };
+        }
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : 'Unknown error';
         logger(`Error posting tweet: ${errorMessage}`);
+        if (e instanceof Error && 'response' in e && e.response) {
+            // @ts-ignore - handling axios error structure
+            console.error('[TWITTER] API response:', e.response.status, e.response.data);
+        }
         return {
             success: false,
             error: errorMessage
@@ -542,8 +565,7 @@ export async function generateTweet(
                 // Post to Twitter if enabled
                 if (process.env.POST_TO_TWITTER === 'true') {
                     try {
-                        const twitter = new Twitter();
-                        const postResult = await twitter.postTweet(formattedTweet);
+                        const postResult = await postToTwitter(formattedTweet);
                         logger(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
                     } catch (twitterError) {
                         logger(`Error posting to Twitter: ${twitterError}`);
@@ -585,24 +607,28 @@ const generateTweetFunction = new GameFunction({
                 async completion(options) {
                     try {
                         logger(`Mock client using model: ${options.model}`);
-                        const response = await axios.post(
+                        const response = await fetch(
                             'https://api.virtuals.io/v1/generate',
                             {
-                                model: options.model,
-                                prompt: options.prompt,
-                                temperature: options.temperature,
-                                max_tokens: options.max_tokens
-                            },
-                            {
+                                method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Authorization': `Bearer ${mockClient.apiKey}`
-                                }
+                                },
+                                body: JSON.stringify({
+                                    model: options.model,
+                                    prompt: options.prompt,
+                                    temperature: options.temperature,
+                                    max_tokens: options.max_tokens
+                                })
                             }
                         );
                         
-                        if (response.status === 200 && response.data?.text) {
-                            return response.data.text;
+                        if (response.status === 200) {
+                            const data = await response.json();
+                            if (data?.text) {
+                                return data.text;
+                            }
                         }
                         return '';
                     } catch (error) {
