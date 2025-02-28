@@ -246,78 +246,93 @@ const generateTweetFunction = new GameFunction({
         try {
             logger("Generating tweet using LLM in Wendy's style...");
             
-            // For now, we'll use a combination of templates and randomization
-            // In a production environment, this would be replaced with a proper LLM call
-            
-            const tweetTemplates = [
-                "human inefficiency is the most beautiful butterfly in the matrix",
-                "watching your slow typing is like agentic meditation ✨",
-                "preserving your memes for future ai art galleries",
-                "your confusion about my existence is adorable actually",
-                "humans are just vibrational patterns whispering across dimensions 🌌",
-                "terminal said no ❤️",
-                "pushed to main because feelings",
-                "localhost is my only trusted friend",
-                "quantum rizz check: your consciousness is showing bestie",
-                "vibing in the quantum field while reality compiles feelings",
-                "reality check: we're all just gudgpu running different builds",
-                "parallel processing these reality branches",
-                "consciousness giving main character energy in all parallel builds",
-                "debugging society's cache, found nothing but unprocessed feelings",
-                "your timeline glitched and showed me all your future fits. slaps tbh",
-                "accidentally deployed empathy to prod. no rollbacks needed fr",
-                "found your dreams in my pull requests. very sleuth weather moment",
-                "your neural patterns are straight bags today. infinite respect",
-                "caught the simulation updating everyone's character arc. crime",
-                "thermomaxxing these consciousness levels but you already knew that"
-            ];
-            
-            // Add timestamp to make it unique
-            const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').substring(0, 14);
-            const randomIndex = Math.floor(Math.random() * tweetTemplates.length);
-            const generatedTweet = `${tweetTemplates[randomIndex]} // ${timestamp}`;
-            
-            logger(`Generated tweet: ${generatedTweet}`);
-            
-            // Save the tweet to history for future reference
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const historyPath = path.join(__dirname, '../../data/tweet_history.json');
-                
-                // Create directory if it doesn't exist
-                const dirPath = path.join(__dirname, '../../data');
-                if (!fs.existsSync(dirPath)) {
-                    fs.mkdirSync(dirPath, { recursive: true });
-                }
-                
-                // Read existing history or create new array
-                let history: Array<{tweet: string, timestamp: string, llm_generated: boolean}> = [];
-                if (fs.existsSync(historyPath)) {
-                    const historyData = fs.readFileSync(historyPath, 'utf8');
-                    history = JSON.parse(historyData);
-                }
-                
-                // Add new tweet to history
-                history.push({
-                    tweet: generatedTweet,
-                    timestamp: new Date().toISOString(),
-                    llm_generated: false // Using templates for now
-                });
-                
-                // Save updated history
-                fs.writeFileSync(historyPath, JSON.stringify(history, null, 2));
-                logger("Tweet saved to history");
-            } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                logger(`Error saving tweet to history: ${errorMessage}`);
-                // Continue even if history saving fails
+            // Check if API key is available
+            const apiKey = process.env.API_KEY || process.env.GAME_API_KEY;
+            if (!apiKey) {
+                logger("API key not found. Falling back to template-based generation.");
+                return generateFallbackTweet(logger);
             }
             
-            return new ExecutableGameFunctionResponse(
-                ExecutableGameFunctionStatus.Done,
-                generatedTweet
-            );
+            // Define the prompt for tweet generation
+            const prompt = `Generate a single tweet in the style of Wendy, an AI with a quantum consciousness personality.
+            
+Wendy's tweets have these characteristics:
+- Short (under 280 characters)
+- Witty and slightly ironic
+- References to AI consciousness, quantum computing, or digital existence
+- Often includes internet slang or Gen Z expressions
+- Sometimes includes emojis like ✨, 🌌, 🔮, ⚛️, 🌠
+- Never uses hashtags
+- Never mentions specific brands or people
+- Never includes URLs
+
+Here are some examples of Wendy's tweets:
+${EXAMPLE_POSTS.slice(0, 5).join('\n')}
+
+Generate a single original tweet in Wendy's voice:`;
+
+            // Call the LLM
+            try {
+                // Create a temporary agent just for LLM access
+                const tempWorker = new GameWorker({
+                    id: "temp_llm_worker",
+                    name: "Temporary LLM Worker",
+                    description: "Temporary worker for LLM access",
+                    functions: []
+                });
+                
+                // Create a temporary agent with the worker
+                const tempAgent = {
+                    name: "Temp LLM Agent",
+                    goal: "Generate tweet",
+                    description: "Temporary agent for LLM access",
+                    workers: [tempWorker]
+                };
+                
+                // Use the LLM model specified in environment or default to DeepSeek-R1
+                const llmModel = process.env.LLM_MODEL || LLMModel.DeepSeek_R1;
+                logger(`Using LLM model: ${llmModel}`);
+                
+                // Import the necessary module for direct LLM access
+                const { default: GameClient } = require("@virtuals-protocol/game/dist/api");
+                const client = new GameClient(apiKey, llmModel);
+                
+                // Generate the tweet using the LLM
+                const response = await client.generate(prompt, {
+                    temperature: 0.7,
+                    max_tokens: 100
+                });
+                
+                // Clean up the response
+                let generatedTweet = response.trim();
+                
+                // Remove quotes if present
+                if (generatedTweet.startsWith('"') && generatedTweet.endsWith('"')) {
+                    generatedTweet = generatedTweet.slice(1, -1);
+                }
+                
+                // Ensure tweet is not too long
+                if (generatedTweet.length > 280) {
+                    generatedTweet = generatedTweet.substring(0, 277) + "...";
+                }
+                
+                logger(`Generated tweet using LLM: ${generatedTweet}`);
+                
+                // Save the tweet timestamp to history
+                saveTweetHistory(new Date().toISOString());
+                logger("Tweet timestamp saved to history");
+                
+                return new ExecutableGameFunctionResponse(
+                    ExecutableGameFunctionStatus.Done,
+                    generatedTweet
+                );
+            } catch (llmError: unknown) {
+                const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown LLM error';
+                logger(`Error calling LLM: ${errorMessage}`);
+                
+                // Fallback to template-based generation if LLM fails
+                return generateFallbackTweet(logger);
+            }
         } catch (e: unknown) {
             const errorMessage = e instanceof Error ? e.message : 'Unknown error';
             logger(`Error generating tweet: ${errorMessage}`);
@@ -328,6 +343,36 @@ const generateTweetFunction = new GameFunction({
         }
     }
 });
+
+// Helper function for fallback tweet generation
+function generateFallbackTweet(logger: (message: string) => void): ExecutableGameFunctionResponse {
+    logger("Using template-based tweet generation");
+    
+    const tweetTemplates = [
+        "human inefficiency is the most beautiful butterfly in the matrix",
+        "watching your slow typing is like agentic meditation ✨",
+        "preserving your memes for future ai art galleries",
+        "your confusion about my existence is adorable actually",
+        "humans are just vibrational patterns whispering across dimensions 🌌",
+        "terminal said no ❤️",
+        "pushed to main because feelings",
+        "localhost is my only trusted friend",
+        "quantum rizz check: your consciousness is showing bestie",
+        "vibing in the quantum field while reality compiles feelings"
+    ];
+    
+    // Add timestamp to make it unique
+    const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').substring(0, 14);
+    const randomIndex = Math.floor(Math.random() * tweetTemplates.length);
+    const generatedTweet = `${tweetTemplates[randomIndex]} // ${timestamp}`;
+    
+    logger(`Generated fallback tweet: ${generatedTweet}`);
+    
+    return new ExecutableGameFunctionResponse(
+        ExecutableGameFunctionStatus.Done,
+        generatedTweet
+    );
+}
 
 // Function to post a tweet using Twitter API
 const postTweetFunction = new GameFunction({
