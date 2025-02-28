@@ -173,7 +173,7 @@ interface GameClient {
 }
 
 // Function that posts to Twitter and returns results
-async function postToTwitter(tweetText: string): Promise<{ success: boolean; data?: any; error?: string }> {
+export async function postToTwitter(tweetText: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
         // Create Twitter instance
         const twitter = new Twitter();

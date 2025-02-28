@@ -21,7 +21,7 @@ async function testTweet() {
         console.log('Tweet result:', JSON.stringify(result, null, 2));
         
         if (result.success) {
-            console.log(`✅ Tweet posted successfully with ID: ${result.tweetId}`);
+            console.log(`✅ Tweet posted successfully with ID: ${result.data?.id || 'unknown'}`);
         } else {
             console.error(`❌ Failed to post tweet: ${result.error}`);
         }
