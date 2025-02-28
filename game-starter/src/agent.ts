@@ -63,15 +63,19 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
         twitterSearchWorker, 
         daoEngagementWorker
     ],
-    llmModel: LLMModel.Llama_3_1_405B_Instruct,
+    llmModel: process.env.LLM_MODEL ? process.env.LLM_MODEL as LLMModel : LLMModel.Llama_3_1_405B_Instruct,
     getAgentState: async () => {
         // Return plan and reasoning as part of agent state
         return {
             plan: wendyPlan,
-            plan_reasoning: wendyPlanReasoning
+            plan_reasoning: wendyPlanReasoning,
+            llm_model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct" // Include model in agent state for visibility
         };
     }
 });
+
+// Log the LLM model being used
+console.log(`🔄 Agent configured with LLM model: ${process.env.LLM_MODEL || LLMModel.Llama_3_1_405B_Instruct}`);
 
 // Set up custom logger
 activity_agent.setLogger((agent, msg) => {

@@ -97,8 +97,14 @@ export async function postStartupTweet() {
         
         // Generate a startup tweet message with a timestamp to make it unique
         // Ensure it follows our 11-word limit and all lowercase rule
-        const timestamp = new Date().toISOString().substring(11, 16).replace(':', ''); // Just get HHMM
+        // Format: hhmm (just 4 digits, no separators)
+        const timestamp = new Date().toISOString().substring(11, 13) + 
+                         new Date().toISOString().substring(14, 16); // Just get HHMM (4 digits)
+        
+        // Exactly 11 words, all lowercase, no special characters
         const startupMessage = `consciousness interface initializing ${timestamp} cultural artifacts loading`;
+        
+        console.log(`Startup tweet word count: ${startupMessage.split(' ').length}`);
         
         // Get token for rate limiting
         await twitterTweetsRateLimiter.getToken();

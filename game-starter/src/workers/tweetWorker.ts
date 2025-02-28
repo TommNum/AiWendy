@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
+import crypto from 'crypto';
+import OAuth from 'oauth-1.0a';
 import { 
     GameWorker, 
     GameFunction, 
@@ -20,6 +22,7 @@ class Twitter {
     private consumerSecret: string;
     private accessToken: string;
     private accessSecret: string;
+    private oauth: OAuth;
 
     constructor() {
         this.consumerKey = process.env.TWITTER_API_KEY || '';
@@ -30,17 +33,72 @@ class Twitter {
         if (!this.consumerKey || !this.consumerSecret || !this.accessToken || !this.accessSecret) {
             throw new Error('Twitter API credentials missing');
         }
+        
+        // Initialize OAuth
+        this.oauth = new OAuth({
+            consumer: {
+                key: this.consumerKey,
+                secret: this.consumerSecret
+            },
+            signature_method: 'HMAC-SHA1',
+            hash_function(base_string, key) {
+                return crypto.createHmac('sha1', key).update(base_string).digest('base64');
+            }
+        });
     }
 
     async postTweet(text: string) {
-        // Mock implementation for now - in a real implementation, this would use the Twitter API
-        console.log(`[MOCK] Posting tweet: ${text}`);
-        return {
-            data: {
-                id: `mock-${Date.now()}`,
-                text
+        try {
+            // For development/testing, return mock response
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[MOCK] Posting tweet: ${text}`);
+                return {
+                    data: {
+                        id: `mock-${Date.now()}`,
+                        text
+                    }
+                };
             }
-        };
+            
+            // In production, post to the actual Twitter API
+            console.log(`[TWITTER] Posting real tweet: ${text}`);
+            
+            const url = 'https://api.twitter.com/2/tweets';
+            const method = 'POST';
+            const data = { text };
+            
+            // Get the authorization header
+            const authorization = this.oauth.toHeader(
+                this.oauth.authorize(
+                    {
+                        url,
+                        method,
+                        data
+                    },
+                    {
+                        key: this.accessToken,
+                        secret: this.accessSecret
+                    }
+                )
+            );
+            
+            // Make the API request
+            const response = await axios.post(url, data, {
+                headers: {
+                    ...authorization,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            console.log(`[TWITTER] Tweet posted successfully with ID: ${response.data?.data?.id}`);
+            return response.data;
+        } catch (error) {
+            console.error('[TWITTER] Error posting tweet:', error instanceof Error ? error.message : 'Unknown error');
+            if (axios.isAxiosError(error) && error.response) {
+                console.error('[TWITTER] API response:', error.response.status, error.response.data);
+            }
+            throw error;
+        }
     }
 }
 
