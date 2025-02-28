@@ -317,7 +317,7 @@ export async function generateTweet(
             }
             
             try {
-                logger(`Attempting direct client completion`);
+                logger(`Attempting direct client completion with model: ${model}`);
                 const response = await wendy_client.completion({
                     model,
                     prompt,
@@ -346,6 +346,7 @@ export async function generateTweet(
                 }
                 
                 logger(`Calling primary API endpoint with API key ${apiKey ? `(${apiKey.substring(0, 3)}...)` : 'missing'}`);
+                logger(`Using model: ${model} - this must match a supported model on the API`);
                 
                 const response = await fetch('https://api.virtuals.io/v1/generate', {
                     method: 'POST',
@@ -398,6 +399,7 @@ export async function generateTweet(
                 }
                 
                 logger(`Calling alternative API endpoint with API key ${apiKey ? `(${apiKey.substring(0, 3)}...)` : 'missing'}`);
+                logger(`Using model: ${model} - this must match a supported model on the API`);
                 
                 const response = await fetch('https://api.virtuals.io/v1/llm/completions', {
                     method: 'POST',
@@ -524,6 +526,7 @@ const generateTweetFunction = new GameFunction({
                 apiKey: process.env.API_KEY || process.env.GAME_API_KEY || '',
                 async completion(options) {
                     try {
+                        logger(`Mock client using model: ${options.model}`);
                         const response = await axios.post(
                             'https://api.virtuals.io/v1/generate',
                             {

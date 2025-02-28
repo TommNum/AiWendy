@@ -6,6 +6,14 @@ import path from 'path';
 // Load environment variables
 dotenv.config();
 
+// Show model information from environment
+const MODEL = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
+console.log(`Using LLM model: ${MODEL}`);
+
+// Make sure the model is explicitly set in the environment
+// This ensures all API calls use our specified model
+process.env.LLM_MODEL = MODEL;
+
 // Define the interface for the completion options to match what's expected
 interface CompletionOptions {
     model: string;
@@ -19,7 +27,7 @@ const createMockLLMClient = () => {
     return {
         apiKey: 'mock-api-key', // This doesn't need to be real for the mock
         async completion(options: CompletionOptions): Promise<string> {
-            console.log(`[Mock LLM] Received prompt with temperature ${options.temperature}`);
+            console.log(`[Mock LLM] Received prompt with model ${options.model} and temperature ${options.temperature}`);
             
             // For debugging, save the prompt to a file
             const debugDir = path.join(__dirname, '../debug');
