@@ -1,6 +1,7 @@
 import { activity_agent, waitForAgentReady } from './agent';
 import { virtualsApiRateLimiter, twitterMentionsRateLimiter, twitterTweetsRateLimiter } from './utils/rateLimiter';
 import { ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
+import { postToTwitter } from './workers/tweetWorker';  // Import the postToTwitter function
 
 /**
  * Task Scheduler - Manages the timing of different agent operations
@@ -102,31 +103,21 @@ export async function postStartupTweet() {
         // Get token for rate limiting
         await twitterTweetsRateLimiter.getToken();
         
-        // Log status and execute through the agent
+        // Log status and post the tweet directly using the Twitter API client
         console.log(`Posting startup tweet: "${startupMessage}"`);
         
-        // Set an environment variable to indicate the current operation
-        process.env.CURRENT_OPERATION = "post_tweet";
-        process.env.TWEET_CONTENT = startupMessage;
+        // Post the tweet directly instead of using the agent
+        const result = await postToTwitter(startupMessage);
         
-        // Execute the tweet operation via the agent
-        await activity_agent.step({ verbose: true });
-        
-        // Log success message
-        console.log(`✅ Startup tweet posted successfully!`);
-        
-        // Clean up environment variables
-        delete process.env.CURRENT_OPERATION;
-        delete process.env.TWEET_CONTENT;
-        
-        return true;
+        if (result.success) {
+            console.log(`✅ Startup tweet posted successfully!`);
+            return true;
+        } else {
+            console.error(`Error posting startup tweet: ${result.error}`);
+            return false;
+        }
     } catch (error) {
         console.error("Error posting startup tweet:", error instanceof Error ? error.message : 'Unknown error');
-        
-        // Clean up environment variables even if there's an error
-        delete process.env.CURRENT_OPERATION;
-        delete process.env.TWEET_CONTENT;
-        
         return false;
     }
 }
