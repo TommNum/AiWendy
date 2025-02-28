@@ -1,4 +1,3 @@
-
 ## Usage
 This is the github repo for our NPM package.
 
@@ -223,3 +222,84 @@ Head to the [game-starter README](./game-starter/README.md#to-run-project-in-pha
 ## License
 
 This project is licensed under the MIT License.
+
+## Twitter Integration
+
+### OAuth Authentication
+The application uses OAuth 1.0a to authenticate with the Twitter API v2. The implementation in `src/workers/tweetWorker.ts` ensures proper authentication by:
+
+1. Generating an OAuth signature based on the request method, URL, and parameters
+2. Creating the authorization header with all required OAuth parameters
+3. Sending the request with the proper headers to the Twitter API
+
+The OAuth implementation has been recently updated to fix authentication issues by:
+- Removing the `data` property from the `request_data` object when generating the OAuth signature
+- Updating the OAuth header formatting to use `Object.entries()` for improved type safety
+- Adding detailed logging of the OAuth header for debugging purposes
+
+#### Testing Twitter API Authentication
+A test script is available to verify the Twitter API authentication:
+
+```bash
+# Run the Twitter API test
+npx ts-node src/test-tweet.ts
+```
+
+This test:
+1. Creates a test tweet with a timestamp
+2. Generates the OAuth signature and headers
+3. Posts the tweet to the Twitter API
+4. Verifies the response and displays the tweet ID if successful
+
+### Rate Limiting
+The application implements rate limiting for Twitter API requests to comply with Twitter's guidelines:
+
+1. **Token-Based Rate Limiting**: Using a token bucket algorithm that allows bursts of requests while maintaining a long-term average rate
+2. **Per-Function Limits**: Different functions (posting tweets, checking mentions, searching) have separate rate limits
+3. **Scheduled Operations**: Tweets, mentions, and searches are scheduled at appropriate intervals to avoid hitting rate limits
+
+To modify rate limits, adjust the following settings:
+- Tweet posting: Controlled by the `initializeAndScheduleTweets` function in `src/index.ts`
+- Mention checking: Configured in the `initializeAndScheduleMentions` function
+- Tweet searching: Set in the `initializeAndScheduleTweetSearches` function
+
+### LLM Integration for Tweet Generation
+The application uses the DeepSeek-R1 LLM model to generate tweets. The implementation ensures:
+
+1. Tweets are generated based on cultural context and current events
+2. Content is appropriate and aligned with the agent's personality
+3. Tweets are within the character limit and properly formatted
+
+To test LLM connectivity:
+```bash
+# Run the LLM usage test
+npx ts-node src/test-llm-usage.ts
+```
+
+This test verifies:
+- API key configuration
+- LLM model settings
+- Required environment variables
+
+## Testing
+
+The project includes test scripts to verify key functionality:
+
+### Twitter API Testing
+Run the Twitter API test with:
+```bash
+npx ts-node src/test-tweet.ts
+```
+This verifies the OAuth implementation by posting a test tweet.
+
+### LLM Usage Testing
+Verify that the application is using the LLM via the game API key:
+```bash
+npx ts-node src/test-llm-usage.ts
+```
+
+### Worker Functionality Testing
+Test the initialization and functionality of all workers:
+```bash
+npx ts-node src/test-workers.ts
+```
