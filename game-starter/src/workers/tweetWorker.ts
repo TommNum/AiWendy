@@ -271,67 +271,96 @@ ${EXAMPLE_POSTS.slice(0, 5).join('\n')}
 
 Generate a single original tweet in Wendy's voice:`;
 
-            // Use the LLM service
+            // Use the correct LLM API endpoint
             try {
-                // Use the LLM model specified in environment or default to DeepSeek-R1
+                // Get the modelName from environment
                 const modelName = process.env.LLM_MODEL || 'DeepSeek-R1';
                 logger(`Using LLM model: ${modelName}`);
                 
-                // Call the LLM API directly
-                logger('Sending prompt to LLM...');
+                // Use the correct endpoint as shown in test-direct-llm.ts
+                const requestBody = {
+                    model: modelName,
+                    prompt: prompt,
+                    temperature: 0.7,
+                    max_tokens: 100
+                };
                 
-                // Create the appropriate endpoint URL
-                const apiUrl = 'https://api.virtuals.io/v1/llm/completions';
+                logger(`Request body: ${JSON.stringify(requestBody)}`);
                 
-                // Make the API request
-                const response = await fetch(apiUrl, {
+                // Make the API request to the correct endpoint
+                const response = await fetch('https://api.virtuals.io/v1/generate', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${apiKey}`
                     },
-                    body: JSON.stringify({
-                        model: modelName,
-                        prompt: prompt,
-                        max_tokens: 100,
-                        temperature: 0.7
-                    })
+                    body: JSON.stringify(requestBody)
                 });
                 
+                logger(`API response status: ${response.status} ${response.statusText}`);
+                
+                // Special handling for 204 No Content response
+                if (response.status === 204) {
+                    logger("LLM API returned 204 No Content. This indicates the request was processed but no content was returned.");
+                    logger("Falling back to template-based generation due to empty LLM response.");
+                    return generateFallbackTweet(logger);
+                }
+                
                 if (!response.ok) {
+                    // If we get a 429 Too Many Requests, log additional information
+                    if (response.status === 429) {
+                        const retryAfter = response.headers.get('retry-after');
+                        logger(`Rate limit exceeded. Retry after: ${retryAfter || 'unknown'} seconds`);
+                    }
+                    
                     throw new Error(`LLM API returned status ${response.status}: ${await response.text()}`);
                 }
                 
-                const data = await response.json();
+                // Try to parse response as text first
+                const responseText = await response.text();
                 
-                // Extract the generated text from the response
-                if (!data || !data.choices || !data.choices[0] || !data.choices[0].text) {
-                    throw new Error('LLM API returned unexpected response format');
+                if (!responseText) {
+                    logger("LLM API returned an empty response body despite 200 OK status.");
+                    throw new Error('Empty response from LLM API');
                 }
                 
-                // Extract the generated text
-                let generatedTweet = data.choices[0].text.trim();
-                
-                // Remove quotes if present
-                if (generatedTweet.startsWith('"') && generatedTweet.endsWith('"')) {
-                    generatedTweet = generatedTweet.slice(1, -1);
+                // Parse the response
+                try {
+                    const data = JSON.parse(responseText);
+                    
+                    // Extract the generated text based on the direct-llm test format
+                    if (!data.text) {
+                        logger(`LLM API returned unexpected format: ${JSON.stringify(data)}`);
+                        throw new Error('No text field in LLM API response');
+                    }
+                    
+                    let generatedTweet = data.text.trim();
+                    
+                    // Remove quotes if present
+                    if (generatedTweet.startsWith('"') && generatedTweet.endsWith('"')) {
+                        generatedTweet = generatedTweet.slice(1, -1);
+                    }
+                    
+                    // Ensure tweet is not too long
+                    if (generatedTweet.length > 280) {
+                        generatedTweet = generatedTweet.substring(0, 277) + "...";
+                    }
+                    
+                    logger(`Generated tweet using LLM: ${generatedTweet}`);
+                    
+                    // Save the tweet timestamp to history
+                    saveTweetHistory(new Date().toISOString());
+                    logger("Tweet timestamp saved to history");
+                    
+                    return new ExecutableGameFunctionResponse(
+                        ExecutableGameFunctionStatus.Done,
+                        generatedTweet
+                    );
+                } catch (parseError) {
+                    logger(`Failed to parse LLM response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+                    logger(`Raw response was: ${responseText}`);
+                    throw new Error('Failed to parse LLM API response');
                 }
-                
-                // Ensure tweet is not too long
-                if (generatedTweet.length > 280) {
-                    generatedTweet = generatedTweet.substring(0, 277) + "...";
-                }
-                
-                logger(`Generated tweet using LLM: ${generatedTweet}`);
-                
-                // Save the tweet timestamp to history
-                saveTweetHistory(new Date().toISOString());
-                logger("Tweet timestamp saved to history");
-                
-                return new ExecutableGameFunctionResponse(
-                    ExecutableGameFunctionStatus.Done,
-                    generatedTweet
-                );
             } catch (llmError: unknown) {
                 const errorMessage = llmError instanceof Error ? llmError.message : 'Unknown LLM error';
                 logger(`Error calling LLM: ${errorMessage}`);
@@ -488,7 +517,7 @@ export const tweetWorker = new GameWorker({
             can_tweet: canTweet,
             time_until_next_tweet: timeUntilNextTweet,
             tweet_examples: EXAMPLE_POSTS,
-            llm_model: process.env.LLM_MODEL || LLMModel.DeepSeek_R1
+            llm_model: process.env.LLM_MODEL || 'DeepSeek-R1'
         };
     }
 }); 
