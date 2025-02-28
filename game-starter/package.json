@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "plugin": "node dist/plugins/example.js",
     "dev": "ts-node src/index.ts",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test:llm": "ts-node src/test-llm-integration.ts"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +28,7 @@
     "@types/dotenv": "^6.1.1",
     "@virtuals-protocol/game": "^0.1.9",
     "dotenv": "^16.4.7",
+    "oauth-1.0a": "^2.2.6",
     "openai": "^4.81.0"
   }
 }

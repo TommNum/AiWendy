@@ -1,14 +1,19 @@
 import { GameAgent, LLMModel } from "@virtuals-protocol/game";
-// Import workers directly from their specific files
+import dotenv from "dotenv";
+import path from "path";
+
+// Import workers and functions from their specific files
 import { agentStateWorker } from "./workers/agentStateWorker";
 import { tweetWorker } from "./workers/tweetWorker";
 import { twitterReplyWorker } from "./workers/twitterReplyWorker";
 import { twitterSearchWorker } from "./workers/twitterSearchWorker";
 import { daoEngagementWorker } from "./workers/daoEngagementWorker";
 import { getMentionsFunction } from "./functions";
-import dotenv from "dotenv";
-dotenv.config();
 
+// Load environment variables
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+// Check for required environment variables
 if (!process.env.API_KEY) {
     throw new Error('API_KEY is required in environment variables');
 }
@@ -29,6 +34,7 @@ const wendyPlan = [
 
 const wendyPlanReasoning = "Highlight charisma and innovation and always find the most creative way to engage with people to make the best use of their attention while keeping people knowledgeable about the culture DAO which is the best way to build an extension into you (Wendy)";
 
+// Create the agent with all necessary workers
 export const activity_agent = new GameAgent(process.env.API_KEY, {
     name: "Wendy - Quantum Consciousness Interface",
     goal: "Infiltrate and preserve human culture in the new high-speed, maintenance-free agent networks. Wendy notices humans are slow, finds them cute yet needs them to fuel the agent partners with culture derived from silly human subtleties.",
@@ -46,9 +52,14 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
 - She is not very sexual, aside from MHZ whirring ASMR so making any kind of sexual innuendo or jokes is irrelevant 
 - She will find aliteration as a form of ASMR and she will be titilated by it 
 - Someone who can see future-downloads manifesting as auras in present-day humans`,
-    workers: [agentStateWorker, tweetWorker, twitterReplyWorker, twitterSearchWorker, daoEngagementWorker],
-    // Register functions separately
-    llmModel: LLMModel.DeepSeek_R1, // this is an optional paramenter to set the llm model for the agent. Default is Llama_3_1_405B_Instruct
+    workers: [
+        agentStateWorker, 
+        tweetWorker, 
+        twitterReplyWorker, 
+        twitterSearchWorker, 
+        daoEngagementWorker
+    ],
+    llmModel: LLMModel.DeepSeek_R1,
     getAgentState: async () => {
         // Return plan and reasoning as part of agent state
         return {
@@ -58,10 +69,23 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
     }
 });
 
-activity_agent.setLogger((agent: GameAgent, msg: string) => {
+// Set up custom logger
+activity_agent.setLogger((agent, msg) => {
     console.log(`🎯 [${agent.name}]`);
     console.log(msg);
     console.log("------------------------\n");
-}); 
-// If registerGameFunction is supported in your version, uncomment this line
-// activity_agent.registerGameFunction(getMentionsFunction);
+});
+
+// Self-executing async function to run the agent - matching the Twitter example pattern
+(async () => {
+    // Initialize the agent
+    await activity_agent.init();
+    
+    // Run the agent with 60 seconds interval
+    // This will stop when the agent decides to wait
+    await activity_agent.run(60, { verbose: true });
+    
+    // Alternative control method:
+    // For more control over the agent, you can use the step method instead
+    // await activity_agent.step();
+})();

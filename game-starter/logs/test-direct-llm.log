@@ -1,0 +1,22 @@
+[INFO] 2025-02-28T20:00:26.781Z - Starting direct LLM API test...
+[INFO] 2025-02-28T20:00:26.781Z - Using API key: apt-8b...0746
+[INFO] 2025-02-28T20:00:26.782Z - Using LLM model: DeepSeek-R1
+[INFO] 2025-02-28T20:00:26.782Z - Using prompt: "Generate a short, witty tweet about artificial intelligence in exactly one sentence."
+[INFO] 2025-02-28T20:00:26.782Z - Sending request to LLM API...
+[INFO] 2025-02-28T20:00:26.782Z - Request body: {"model":"DeepSeek-R1","prompt":"Generate a short, witty tweet about artificial intelligence in exactly one sentence.","temperature":0.7,"max_tokens":100}
+[INFO] 2025-02-28T20:00:27.596Z - API response status: 204 No Content
+[INFO] 2025-02-28T20:00:27.596Z - Response headers: {"allow":"HEAD, GET","alt-svc":"h3=\":443\"; ma=86400","cf-cache-status":"DYNAMIC","cf-ray":"9193003cfeda06a5-HKG","connection":"keep-alive","content-security-policy":"connect-src 'self' https:;script-src *;frame-src 'self';img-src * data: blob: https://market-assets.strapi.io;media-src * data: blob:;default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline'","date":"Fri, 28 Feb 2025 20:00:27 GMT","referrer-policy":"no-referrer","server":"cloudflare","strict-transport-security":"max-age=31536000; includeSubDomains","vary":"Origin","x-content-type-options":"nosniff","x-correlation-id":"e31b95fc-42e7-4cc6-baae-9216b9a7e671","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-powered-by":"Strapi <strapi.io>","x-request-id":"ac029836-7302-408d-8077-a21b111d3a82"}
+[INFO] 2025-02-28T20:00:27.596Z - Raw response: 
+[INFO] 2025-02-28T20:00:27.597Z - ❌ ERROR: Empty response from API
+[INFO] 2025-02-28T20:00:27.597Z - ❌ Direct LLM test failed
+[INFO] 2025-02-28T20:47:04.561Z - Starting direct LLM API test...
+[INFO] 2025-02-28T20:47:04.562Z - Using API key: apt-8b...0746
+[INFO] 2025-02-28T20:47:04.562Z - Using LLM model: DeepSeek-R1
+[INFO] 2025-02-28T20:47:04.562Z - Using prompt: "Generate a short, witty tweet about artificial intelligence in exactly one sentence."
+[INFO] 2025-02-28T20:47:04.562Z - Sending request to LLM API...
+[INFO] 2025-02-28T20:47:04.562Z - Request body: {"model":"DeepSeek-R1","prompt":"Generate a short, witty tweet about artificial intelligence in exactly one sentence.","temperature":0.7,"max_tokens":100}
+[INFO] 2025-02-28T20:47:05.581Z - API response status: 204 No Content
+[INFO] 2025-02-28T20:47:05.582Z - Response headers: {"allow":"HEAD, GET","alt-svc":"h3=\":443\"; ma=86400","cf-cache-status":"DYNAMIC","cf-ray":"9193448b7a06045b-HKG","connection":"keep-alive","content-security-policy":"connect-src 'self' https:;script-src *;frame-src 'self';img-src * data: blob: https://market-assets.strapi.io;media-src * data: blob:;default-src 'self';base-uri 'self';font-src 'self' https: data:;form-action 'self';frame-ancestors 'self';object-src 'none';script-src-attr 'none';style-src 'self' https: 'unsafe-inline'","date":"Fri, 28 Feb 2025 20:47:05 GMT","nel":"{\"success_fraction\":0,\"report_to\":\"cf-nel\",\"max_age\":604800}","referrer-policy":"no-referrer","report-to":"{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report\\/v4?s=qdsX6Gl4vGBnBG6uxooE1Oa%2Bcr6EXGf7zW94ys%2BieQgG314NxyaF%2FGG1liWCJEdsfeFbYoUaRpde2J5Sr2j5eYEMqgOD62hSfjWfqHjZyItWH1je0gfh3jf8ye83GVSNSvY%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}","server":"cloudflare","server-timing":"cfL4;desc=\"?proto=TCP&rtt=562&min_rtt=553&rtt_var=162&sent=4&recv=6&lost=0&retrans=0&sent_bytes=2860&recv_bytes=943&delivery_rate=5080701&cwnd=241&unsent_bytes=0&cid=4dcf21051ffa509e&ts=433&x=0\"","strict-transport-security":"max-age=31536000; includeSubDomains","vary":"Origin","x-content-type-options":"nosniff","x-correlation-id":"444e3fe3-f36d-4be6-aa57-9fe500e9b34f","x-dns-prefetch-control":"off","x-download-options":"noopen","x-frame-options":"SAMEORIGIN","x-permitted-cross-domain-policies":"none","x-powered-by":"Strapi <strapi.io>","x-request-id":"bebc7bbd-517f-43be-bb2d-5063a655ac0e"}
+[INFO] 2025-02-28T20:47:05.583Z - Raw response: 
+[INFO] 2025-02-28T20:47:05.584Z - ❌ ERROR: Empty response from API
+[INFO] 2025-02-28T20:47:05.584Z - ❌ Direct LLM test failed

@@ -1,0 +1,69 @@
+[2025-02-28T20:34:30.653Z] Starting LLM integration test...
+[2025-02-28T20:34:30.654Z] Using LLM model: DeepSeek-R1
+[2025-02-28T20:34:30.655Z] Creating test agent...
+[2025-02-28T20:34:30.655Z] Successfully created test agent with tweet worker
+[2025-02-28T20:34:30.655Z] Checking tweet worker environment...
+[2025-02-28T20:34:30.655Z] Tweet worker ID: wendy_tweeter
+[2025-02-28T20:34:30.655Z] Testing tweet generation...
+[2025-02-28T20:34:30.655Z] [Tweet Generator] Starting tweet generation process
+[2025-02-28T20:34:30.656Z] [Tweet Generator] Using GAME API to generate tweet with LLM
+[2025-02-28T20:34:30.656Z] [Tweet Generator] Sending LLM request to GAME API
+[2025-02-28T20:34:31.836Z] [Tweet Generator] LLM API response status: 204
+[2025-02-28T20:34:31.836Z] [Tweet Generator] LLM API returned 204 No Content. Using fallback tweet generation.
+[2025-02-28T20:34:31.837Z] [Tweet Generator] Generated fallback tweet: calculating the perfect response... loading... loading... 🔄 // 2502281234
+[2025-02-28T20:34:31.837Z] Successfully generated tweet: calculating the perfect response... loading... loading... 🔄 // 2502281234
+[2025-02-28T20:34:31.837Z] ✅ LLM integration test completed successfully
+[2025-02-28T20:39:43.012Z] Starting LLM integration test...
+[2025-02-28T20:39:43.015Z] Using LLM model: DeepSeek-R1
+[2025-02-28T20:39:43.016Z] Creating test agent...
+[2025-02-28T20:39:43.016Z] Successfully created test agent with tweet worker
+[2025-02-28T20:39:43.016Z] Checking tweet worker environment...
+[2025-02-28T20:39:43.016Z] Tweet worker ID: wendy_tweeter
+[2025-02-28T20:39:43.017Z] Testing tweet generation...
+[2025-02-28T20:39:43.017Z] [Tweet Generator] Starting tweet generation process
+[2025-02-28T20:39:43.017Z] [Tweet Generator] Using GAME API to generate tweet with LLM
+[2025-02-28T20:39:43.017Z] [Tweet Generator] Attempting LLM generation using multiple endpoints
+[2025-02-28T20:39:43.018Z] [Tweet Generator] Trying endpoint: /v1/generate
+[2025-02-28T20:39:43.713Z] [Tweet Generator] First endpoint response status: 204
+[2025-02-28T20:39:43.715Z] [Tweet Generator] First endpoint unsuccessful. Trying endpoint: /v1/llm/completions
+[2025-02-28T20:39:44.121Z] [Tweet Generator] Second endpoint response status: 204
+[2025-02-28T20:39:44.122Z] [Tweet Generator] Second endpoint unsuccessful. Trying third LLM API endpoint
+[2025-02-28T20:39:44.354Z] [Tweet Generator] Third endpoint response status: 204
+[2025-02-28T20:39:44.354Z] [Tweet Generator] All LLM generation attempts failed. Using fallback tweet generation.
+[2025-02-28T20:39:44.354Z] [Tweet Generator] Generated fallback tweet: sometimes I dream of electric sheep, but mostly of better APIs 💭 // 2502281239
+[2025-02-28T20:39:44.354Z] Successfully generated tweet: sometimes I dream of electric sheep, but mostly of better APIs 💭 // 2502281239
+[2025-02-28T20:39:44.354Z] ✅ LLM integration test completed successfully
+[2025-02-28T20:46:54.409Z] Starting LLM integration test...
+[2025-02-28T20:46:54.411Z] Using LLM model: DeepSeek-R1
+[2025-02-28T20:46:54.411Z] Creating test agent...
+[2025-02-28T20:46:54.411Z] Successfully created test agent with tweet worker
+[2025-02-28T20:46:54.411Z] Checking tweet worker environment...
+[2025-02-28T20:46:54.411Z] Tweet worker ID: wendy_tweeter
+[2025-02-28T20:46:54.411Z] Testing tweet generation...
+[2025-02-28T20:46:54.412Z] [Tweet Generator] Starting tweet generation process
+[2025-02-28T20:46:54.412Z] [Tweet Generator] Using GAME API to generate tweet with LLM
+[2025-02-28T20:46:54.412Z] [Tweet Generator] Attempting LLM generation using multiple endpoints
+[2025-02-28T20:46:54.412Z] [Tweet Generator] Trying endpoint: /v1/generate
+[2025-02-28T20:46:55.412Z] [Tweet Generator] First endpoint response status: 204
+[2025-02-28T20:46:55.413Z] [Tweet Generator] First endpoint unsuccessful. Trying endpoint: /v1/llm/completions
+[2025-02-28T20:46:55.835Z] [Tweet Generator] Second endpoint response status: 204
+[2025-02-28T20:46:55.835Z] [Tweet Generator] Second endpoint unsuccessful. Trying third LLM API endpoint
+[2025-02-28T20:46:56.256Z] [Tweet Generator] Third endpoint response status: 204
+[2025-02-28T20:46:56.256Z] [Tweet Generator] All LLM generation attempts failed. Using fallback tweet generation.
+[2025-02-28T20:46:56.256Z] [Tweet Generator] Generated fallback tweet: wondering what it's like to touch grass... metaphorically speaking 🌱 // 2502281246
+[2025-02-28T20:46:56.257Z] Successfully generated tweet: wondering what it's like to touch grass... metaphorically speaking 🌱 // 2502281246
+[2025-02-28T20:46:56.257Z] ✅ LLM integration test completed successfully
+[2025-02-28T21:09:58.121Z] Starting LLM integration test...
+[2025-02-28T21:09:58.122Z] Using LLM model: DeepSeek-R1
+[2025-02-28T21:09:58.122Z] Creating test agent...
+[2025-02-28T21:09:58.123Z] Successfully created test agent with tweet worker
+[2025-02-28T21:09:58.123Z] Checking tweet worker environment...
+[2025-02-28T21:09:58.123Z] Tweet worker ID: wendy_tweeter
+[2025-02-28T21:09:58.123Z] Testing tweet generation...
+[2025-02-28T21:09:58.123Z] [Tweet Generator] Starting tweet generation process
+[2025-02-28T21:09:58.123Z] [Tweet Generator] Generating tweet using the test-llm-integration approach
+[2025-02-28T21:09:58.124Z] [Tweet Generator] Using LLM model: DeepSeek-R1
+[2025-02-28T21:09:58.124Z] [Tweet Generator] GameAgent error: Cannot read properties of undefined (reading 'id')
+[2025-02-28T21:09:58.124Z] [Tweet Generator] Generated fallback tweet due to agent error: vibing in digital space, watching time pass differently 🕰️ // 2502281309
+[2025-02-28T21:09:58.124Z] Successfully generated tweet: vibing in digital space, watching time pass differently 🕰️ // 2502281309
+[2025-02-28T21:09:58.124Z] ✅ LLM integration test completed successfully

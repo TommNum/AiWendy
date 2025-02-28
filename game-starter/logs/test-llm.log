@@ -1,0 +1,17 @@
+[2025-02-28T20:13:37.558Z] Starting LLM test with updated integration...
+[2025-02-28T20:13:37.559Z] Using LLM model: DeepSeek-R1
+[2025-02-28T20:13:37.559Z] Using prompt: "Generate a short, witty tweet about AI in exactly one sentence."
+[2025-02-28T20:13:37.559Z] Attempting primary endpoint (v2 API)...
+[2025-02-28T20:13:38.819Z] Primary endpoint response status: 429 Too Many Requests
+[2025-02-28T20:13:38.819Z] Response headers: {"alt-svc":"h3=\":443\"; ma=86400","cf-cache-status":"DYNAMIC","cf-ray":"9193138cebf302b6-HKG","connection":"keep-alive","content-length":"68","content-type":"application/json; charset=utf-8","date":"Fri, 28 Feb 2025 20:13:38 GMT","etag":"W/\"44-McWaoNlzt3iglN2odEGCDEADErE\"","nel":"{\"success_fraction\":0,\"report_to\":\"cf-nel\",\"max_age\":604800}","report-to":"{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report\\/v4?s=LNTmT2qdMYxU8xTsZs7Bv7SXc0oUiYh%2FNv%2Fa4biBfXxxSo7WHQL0S9baYAnXmIGraofOebq0Vg8%2FTJB8FbtF23eHjM1egUwEHKQJkTAt1cYjxXeLBHErhqWkl6si5J5deTLSY1ZAvg%3D%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}","retry-after":"47","server":"cloudflare","server-timing":"cfL4;desc=\"?proto=TCP&rtt=425&min_rtt=404&rtt_var=129&sent=4&recv=6&lost=0&retrans=0&sent_bytes=2860&recv_bytes=930&delivery_rate=6507865&cwnd=246&unsent_bytes=0&cid=5a405b4d813a23e0&ts=501&x=0\"","x-powered-by":"Express"}
+[2025-02-28T20:13:38.819Z] ❌ ERROR: Primary endpoint returned error status 429
+[2025-02-28T20:13:38.820Z] Rate limit exceeded. Retry after: 47 seconds
+[2025-02-28T20:13:38.820Z] Error response body: {"statusCode":429,"message":"ThrottlerException: Too Many Requests"}
+[2025-02-28T20:13:38.821Z] Primary endpoint failed. Trying backup endpoint...
+[2025-02-28T20:13:38.821Z] Attempting backup endpoint (v1 API)...
+[2025-02-28T20:13:39.998Z] Backup endpoint response status: 404 Not Found
+[2025-02-28T20:13:39.999Z] Backup response headers: {"access-control-allow-origin":"*","alt-svc":"h3=\":443\"; ma=86400","cf-cache-status":"DYNAMIC","cf-ray":"919313947fe9855d-HKG","connection":"keep-alive","content-encoding":"br","content-type":"application/json; charset=utf-8","date":"Fri, 28 Feb 2025 20:13:40 GMT","etag":"W/\"4e-FYMehazodZyKtZ97bTnEPd1MFMw\"","nel":"{\"success_fraction\":0,\"report_to\":\"cf-nel\",\"max_age\":604800}","report-to":"{\"endpoints\":[{\"url\":\"https:\\/\\/a.nel.cloudflare.com\\/report\\/v4?s=fIPZD%2BAAYuYTFbxp5yav%2BjvJr3CoyZZGFVDt0CCXhEzdfqaSftbJaRSmNqrcbhv7l50FnQGy0EVIZrJGxGRQCARHj58iMJ1886TbgTainbLmL6IhH6Q8OfPXuxScDW%2BOOAKbEcdQBw%3D%3D\"}],\"group\":\"cf-nel\",\"max_age\":604800}","server":"cloudflare","server-timing":"cfL4;desc=\"?proto=TCP&rtt=482&min_rtt=455&rtt_var=162&sent=4&recv=6&lost=0&retrans=0&sent_bytes=2859&recv_bytes=935&delivery_rate=5036521&cwnd=243&unsent_bytes=0&cid=1e1055ae222df8a4&ts=456&x=0\"","transfer-encoding":"chunked","x-powered-by":"Express"}
+[2025-02-28T20:13:39.999Z] ❌ ERROR: Backup endpoint returned error status 404
+[2025-02-28T20:13:40.000Z] Error response body: {"message":"Cannot POST /v1/completions","error":"Not Found","statusCode":404}
+[2025-02-28T20:13:40.000Z] Both LLM endpoints failed. Using fallback method would be appropriate in production.
+[2025-02-28T20:13:40.001Z] ❌ LLM test failed with all endpoints
