@@ -3,9 +3,9 @@
   "tokensPerInterval": 300,
   "intervalMs": 900000,
   "currentTokens": 299,
-  "lastRefillTime": 1740788125644,
-  "requestsThisInterval": 2,
-  "intervalStartTime": 1740787840804,
+  "lastRefillTime": 1740801131889,
+  "requestsThisInterval": 3,
+  "intervalStartTime": 1740800340917,
   "lastTweetTime": 0,
-  "lastUpdate": 1740788125646
+  "lastUpdate": 1740801131890
 }

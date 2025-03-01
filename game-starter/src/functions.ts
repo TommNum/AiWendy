@@ -92,6 +92,51 @@ const saveRepliesHistory = (history: { [id: string]: boolean }): void => {
     saveJsonData(REPLIES_PATH, history);
 };
 
+// Define GameClient interface
+interface GameClient {
+    apiKey: string;
+    completion(options: {
+        model: string;
+        prompt: string;
+        temperature: number;
+        max_tokens: number;
+    }): Promise<string>;
+}
+
+// Create a mock GameClient to handle API calls
+function createGameClient(apiKey: string): GameClient {
+    return {
+        apiKey,
+        async completion(options) {
+            try {
+                console.log(`GameClient using model: ${options.model}`);
+                const response = await fetch("https://api.virtuals.io/api/v0/ai/tasks", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        messages: [{ role: "user", content: options.prompt }],
+                        model: options.model
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`LLM API error: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                const content = data.choices?.[0]?.message?.content || "";
+                return content;
+            } catch (error) {
+                console.error("Error in GameClient completion:", error);
+                throw error; // Re-throw the error for proper handling in the calling functions
+            }
+        }
+    };
+}
+
 // Helper to generate a reply in Wendy's style
 export async function generateReply(mention: string, llmModel: LLMModel = LLMModel.Llama_3_1_405B_Instruct): Promise<string> {
     try {
@@ -121,53 +166,45 @@ Reply:`;
         // Log the LLM usage
         console.log(`Using LLM model ${llmModel} to generate reply to: "${mention}"`);
 
-        // Make an API call to the LLM service using the correct format
-        const response = await fetch("https://api.virtuals.io/api/v0/ai/tasks", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                messages: [{ role: "user", content: prompt }],
-                model: llmModel
-            })
+        // Create a GameClient and use it to generate the reply
+        const gameClient = createGameClient(apiKey);
+        const generatedReply = await gameClient.completion({
+            model: llmModel,
+            prompt: prompt,
+            temperature: 0.7,
+            max_tokens: 50
         });
 
-        // Check if the API call was successful
-        if (!response.ok) {
-            throw new Error(`LLM API error: ${response.status} ${response.statusText}`);
+        // If the response is empty, use a fallback
+        if (!generatedReply || generatedReply.trim().length === 0) {
+            throw new Error("Empty response from LLM API");
         }
 
-        // Parse the response
-        const data = await response.json();
-        let generatedReply = data.choices[0].message.content || "";
-
         // Clean up the generated reply
-        generatedReply = generatedReply.trim().toLowerCase();
+        let cleanedReply = generatedReply.trim().toLowerCase();
         
         // Remove trailing period if present
-        if (generatedReply.endsWith('.')) {
-            generatedReply = generatedReply.slice(0, -1);
+        if (cleanedReply.endsWith('.')) {
+            cleanedReply = cleanedReply.slice(0, -1);
         }
 
         // Truncate to 11 words if longer
-        let words = generatedReply.split(/\s+/);
+        let words = cleanedReply.split(/\s+/);
         if (words.length > 11) {
-            generatedReply = words.slice(0, 11).join(' ');
+            cleanedReply = words.slice(0, 11).join(' ');
         }
 
         // Log the generated reply
-        console.log(`LLM generated reply: "${generatedReply}"`);
+        console.log(`LLM generated reply: "${cleanedReply}"`);
         
         // 10% chance to add a quantum emoji
         const shouldAddEmoji = Math.random() < 0.1;
         if (shouldAddEmoji) {
             const randomEmoji = QUANTUM_EMOJIS[Math.floor(Math.random() * QUANTUM_EMOJIS.length)];
-            return `${generatedReply} ${randomEmoji}`;
+            return `${cleanedReply} ${randomEmoji}`;
         }
         
-        return generatedReply;
+        return cleanedReply;
     } catch (error) {
         console.error("Error generating reply:", error);
         
@@ -233,46 +270,38 @@ YOUR CONCISE REPLY (under 11 words):`;
         // Log the LLM usage
         console.log(`Using LLM model ${model} to generate short reply to: "${tweetText}"`);
 
-        // Make an API call to the LLM service using the correct format
-        const response = await fetch("https://api.virtuals.io/api/v0/ai/tasks", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                messages: [{ role: "user", content: prompt }],
-                model: model
-            })
+        // Create a GameClient and use it to generate the reply
+        const gameClient = createGameClient(apiKey);
+        const generatedReply = await gameClient.completion({
+            model: model,
+            prompt: prompt,
+            temperature: 0.7,
+            max_tokens: 50
         });
 
-        // Check if the API call was successful
-        if (!response.ok) {
-            throw new Error(`LLM API error: ${response.status} ${response.statusText}`);
+        // If the response is empty, use a fallback
+        if (!generatedReply || generatedReply.trim().length === 0) {
+            throw new Error("Empty response from LLM API");
         }
 
-        // Parse the response
-        const data = await response.json();
-        let generatedReply = data.choices[0].message.content || "";
-
         // Clean up the generated reply
-        generatedReply = generatedReply.trim();
+        let cleanedReply = generatedReply.trim();
         
         // Ensure reply is under 11 words by truncating if necessary
-        const words = generatedReply.split(' ');
+        const words = cleanedReply.split(' ');
         if (words.length > 11) {
-            generatedReply = words.slice(0, 11).join(' ');
+            cleanedReply = words.slice(0, 11).join(' ');
         }
         
         // Add emojis if we have any
         if (emojiString.length > 0) {
-            generatedReply = `${generatedReply} ${emojiString}`;
+            cleanedReply = `${cleanedReply} ${emojiString}`;
         }
         
         // Log the generated reply
-        console.log(`LLM generated short reply: "${generatedReply}"`);
+        console.log(`LLM generated short reply: "${cleanedReply}"`);
         
-        return generatedReply;
+        return cleanedReply;
     } catch (error) {
         console.error("Error generating short reply:", error);
         // Fallback responses for when LLM fails
