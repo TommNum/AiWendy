@@ -1,6 +1,10 @@
 import { Pool } from 'pg';
 import fs from 'fs';
 import path from 'path';
+import { AsyncLocalStorage } from 'async_hooks';
+
+// Create AsyncLocalStorage for correlation ID tracking
+const correlationIdStorage = new AsyncLocalStorage<string>();
 
 // Database connection
 let pool: Pool | null = null;
@@ -30,6 +34,7 @@ export async function initDbLogger(): Promise<void> {
         message TEXT NOT NULL,
         timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
         source VARCHAR(100),
+        correlation_id VARCHAR(100),
         additional_data JSONB
       )
     `);
@@ -42,6 +47,34 @@ export async function initDbLogger(): Promise<void> {
   }
 }
 
+/**
+ * Get the current correlation ID from the AsyncLocalStorage
+ * @returns The current correlation ID or undefined if not set
+ */
+export function getCorrelationId(): string | undefined {
+  return correlationIdStorage.getStore();
+}
+
+/**
+ * Set the correlation ID for the current execution context
+ */
+export function setCorrelationId<T>(correlationId: string, callback?: () => T): T | void {
+  if (callback) {
+    return correlationIdStorage.run(correlationId, callback);
+  } else {
+    correlationIdStorage.enterWith(correlationId);
+    return;
+  }
+}
+
+/**
+ * Generate a new random correlation ID
+ * @returns A newly generated correlation ID
+ */
+export function generateCorrelationId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+}
+
 // Log to database or fall back to file
 async function logToDb(
   level: string, 
@@ -50,13 +83,14 @@ async function logToDb(
   additionalData: Record<string, any> = {}
 ): Promise<void> {
   const timestamp = new Date().toISOString();
-  const logMessage = `[${level.toUpperCase()}] ${timestamp} - ${message}`;
+  const correlationId = getCorrelationId();
+  const logMessage = `[${level.toUpperCase()}] ${timestamp} ${correlationId ? `[${correlationId}]` : ''} - ${message}`;
   
   try {
     if (pool) {
       await pool.query(
-        'INSERT INTO logs(level, message, source, additional_data) VALUES($1, $2, $3, $4)',
-        [level, message, source, JSON.stringify(additionalData)]
+        'INSERT INTO logs(level, message, source, correlation_id, additional_data) VALUES($1, $2, $3, $4, $5)',
+        [level, message, source, correlationId, JSON.stringify(additionalData)]
       );
     } else {
       // Fallback to file logging
@@ -93,4 +127,32 @@ export const dbLogger = {
       console.debug(`[DEBUG] - ${message}`);
     }
   }
-}; 
+};
+
+/**
+ * Simple wrapper for logging info messages
+ */
+export function logInfo(message: string, category: string = 'general', metadata: Record<string, any> = {}): void {
+  dbLogger.info(message, category, metadata);
+}
+
+/**
+ * Simple wrapper for logging error messages
+ */
+export function logError(message: string, category: string = 'error', metadata: Record<string, any> = {}): void {
+  dbLogger.error(message, category, metadata);
+}
+
+/**
+ * Simple wrapper for logging warning messages
+ */
+export function logWarning(message: string, category: string = 'warning', metadata: Record<string, any> = {}): void {
+  dbLogger.warn(message, category, metadata);
+}
+
+/**
+ * Simple wrapper for logging debug messages
+ */
+export function logDebug(message: string, category: string = 'debug', metadata: Record<string, any> = {}): void {
+  dbLogger.debug(message, category, metadata);
+} 

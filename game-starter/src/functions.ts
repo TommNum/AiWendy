@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { activity_agent } from './agent'; // Import activity_agent from agent.ts
 import { withRetry } from './utils/retry';
+import { getMentions, Tweet } from './utils/twitter';
 
 // Load environment variables
 config({ path: resolve(__dirname, '../.env') });
@@ -93,6 +94,30 @@ const readRepliesHistory = (): { [id: string]: boolean } => {
 const saveRepliesHistory = (history: { [id: string]: boolean }): void => {
     saveJsonData(REPLIES_PATH, history);
 };
+
+// Environment object for agent tasks
+const environment = {
+  context: {},
+  functions: {},
+};
+
+// Helper functions for agent tasks
+export async function createAgentTask(agent: any, taskPrompt: string): Promise<string> {
+  return await agent.gameClient.setTask(
+    agent.agentId!,
+    taskPrompt
+  );
+}
+
+export async function getAgentTaskAction(agent: any, submissionId: string, worker: any): Promise<any> {
+  return await agent.gameClient.getTaskAction(
+    agent.agentId!,
+    submissionId,
+    worker,
+    null, // No previous result
+    environment
+  );
+}
 
 // Helper to generate a reply in Wendy's style
 const generateReply = async (mention: string, llmModel: LLMModel): Promise<string> => {
@@ -192,23 +217,14 @@ YOUR CONCISE REPLY (under 11 words):`;
         
         // Create a task for the agent to process
         const taskPrompt = `Reply to this tweet in Wendy's style: "${tweetText}"`;
-        const submissionId = await activity_agent.gameClient.setTask(
-            activity_agent.agentId!, 
-            taskPrompt
-        );
+        const submissionId = await createAgentTask(activity_agent, taskPrompt);
 
         // Get a worker for processing
         const worker = activity_agent.getWorkerById(activity_agent.workers[0].id);
         const environment = worker.getEnvironment ? await worker.getEnvironment() : {};
 
         // Use the GameClient to get the response
-        const action = await activity_agent.gameClient.getTaskAction(
-            activity_agent.agentId!,
-            submissionId,
-            worker,
-            null, // No previous result
-            environment
-        );
+        const action = await getAgentTaskAction(activity_agent, submissionId, worker);
 
         // Extract the generated content from the action
         const generatedReply = action.action_args.thought || "";
@@ -281,7 +297,7 @@ export const getMentionsFunction = new GameFunction({
             const mentions = await withRetry(
                 // Schedule through rate limiter inside retry
                 async () => await twitterMentionsRateLimiter.schedule(() => 
-                    getMentions(process.env.TWITTER_USER_ID || '')
+                    getMentions(parseInt(process.env.TWITTER_USER_ID || '0'))
                 ),
                 {
                     maxRetries: 3,
@@ -292,7 +308,7 @@ export const getMentionsFunction = new GameFunction({
             
             // Save mentions to history
             const mentionsHistory = readMentionsHistory();
-            mentions.forEach(mention => {
+            mentions.forEach((mention: Tweet) => {
                 mentionsHistory[mention.id] = true;
             });
             saveJsonData(MENTIONS_PATH, mentionsHistory);
@@ -308,25 +324,24 @@ export const getMentionsFunction = new GameFunction({
             logger(`Found ${mentions.length} new mentions`);
             
             // Format mentions for the response
-            const formattedMentions = mentions.map(mention => {
+            const formattedMentions = mentions.map((mention: Tweet) => {
                 return {
                     id: mention.id,
                     text: mention.text,
-                    author_name: mention.author_name,
-                    author_username: mention.author_username,
-                    created_at: mention.created_at
+                    author: mention.author,
+                    createdAt: mention.createdAt?.toISOString() || new Date().toISOString()
                 };
             });
             
             return new ExecutableGameFunctionResponse(
                 ExecutableGameFunctionStatus.Done,
-                JSON.stringify(formattedMentions)
+                JSON.stringify(formattedMentions, null, 2)
             );
         } catch (error) {
-            logger(`Error getting mentions: ${error}`);
+            logger(`Failed to get mentions: ${(error as Error).message}`);
             return new ExecutableGameFunctionResponse(
                 ExecutableGameFunctionStatus.Failed,
-                `Error getting mentions: ${error}`
+                `Error getting mentions: ${(error as Error).message}`
             );
         }
     }

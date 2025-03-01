@@ -9,6 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import { twitterApiRateLimiter, twitterRepliesRateLimiter } from "../utils/rateLimiter";
 import { activity_agent } from '../agent';
+import { createAgentTask, getAgentTaskAction } from '../functions';
 
 // Add debug message to verify the module is loaded
 console.log('🏛️ Initializing DAO engagement functionality...');
@@ -243,23 +244,14 @@ const analyzeTweetSentiment = new GameFunction({
             `;
             
             // Create a task for sentiment analysis
-            const submissionId = await activity_agent.gameClient.setTask(
-                activity_agent.agentId!, 
-                sentimentPrompt
-            );
+            const submissionId = await createAgentTask(activity_agent, sentimentPrompt);
             
             // Get a worker for processing
             const worker = activity_agent.getWorkerById(activity_agent.workers[0].id);
             const environment = worker.getEnvironment ? await worker.getEnvironment() : {};
             
             // Use the GameClient to get the sentiment analysis
-            const action = await activity_agent.gameClient.getTaskAction(
-                activity_agent.agentId!,
-                submissionId,
-                worker,
-                null, // No previous result
-                environment
-            );
+            const action = await getAgentTaskAction(activity_agent, submissionId, worker);
             
             // Extract the sentiment from the action
             let sentiment = (action.action_args.thought || "NEUTRAL").trim().toUpperCase();

@@ -1,4 +1,4 @@
-import { TwitterApi } from 'twitter-api-v2';
+import { TwitterApi, TweetV2, Tweetv2TimelineResult } from 'twitter-api-v2';
 import { dbLogger } from './dbLogger';
 import { withRetry } from './retry';
 
@@ -38,8 +38,9 @@ function getTwitterClient(): TwitterApi {
       accessSecret: TWITTER_ACCESS_SECRET,
     });
   } catch (error) {
-    dbLogger.error(`Failed to initialize Twitter client: ${error.message}`, 'twitter');
-    throw error;
+    const err = error as Error;
+    dbLogger.error(`Failed to initialize Twitter client: ${err.message}`, 'twitter');
+    throw err;
   }
 }
 
@@ -76,23 +77,25 @@ export async function postTweet(content: string, inReplyTo: string | null = null
       text: response.data.text,
     };
   } catch (error) {
-    dbLogger.error(`Failed to post tweet: ${error.message}`, 'twitter');
-    throw error;
+    const err = error as Error;
+    dbLogger.error(`Failed to post tweet: ${err.message}`, 'twitter');
+    throw err;
   }
 }
 
 /**
  * Get recent mentions of the authenticated user
+ * @param userId User ID to get mentions for
  * @param count Number of mentions to retrieve (default: 10)
  * @returns Array of tweets mentioning the user
  */
-export async function getMentions(count: number = 10): Promise<Tweet[]> {
+export async function getMentions(userId: number, count: number = 10): Promise<Tweet[]> {
   try {
     const client = getTwitterClient();
     const twitterClient = client.readOnly;
     
-    // Get the user ID
-    const me = await twitterClient.v2.me();
+    // Get the user ID if not provided
+    const me = userId ? { data: { id: userId.toString(), username: '' } } : await twitterClient.v2.me();
     
     // Get mentions with retry logic
     const response = await withRetry(
@@ -108,18 +111,21 @@ export async function getMentions(count: number = 10): Promise<Tweet[]> {
     );
     
     // Map the response to our Tweet interface
-    const mentions = response.data.map(tweet => ({
-      id: tweet.id,
-      text: tweet.text,
-      author: tweet.author_id,
-      createdAt: tweet.created_at ? new Date(tweet.created_at) : undefined,
-    }));
+    const mentions = Array.isArray(response.data) 
+      ? response.data.map((tweet: TweetV2) => ({
+          id: tweet.id,
+          text: tweet.text,
+          author: tweet.author_id,
+          createdAt: tweet.created_at ? new Date(tweet.created_at) : undefined,
+        }))
+      : [];
     
     dbLogger.info(`Retrieved ${mentions.length} mentions`, 'twitter');
     
     return mentions;
   } catch (error) {
-    dbLogger.error(`Failed to get mentions: ${error.message}`, 'twitter');
-    throw error;
+    const err = error as Error;
+    dbLogger.error(`Failed to get mentions: ${err.message}`, 'twitter');
+    throw err;
   }
 } 

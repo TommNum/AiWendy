@@ -96,9 +96,9 @@ class MetricsTracker {
     }
   }
   
-  // Record success/failure counter
-  recordOutcome(name: string, success: boolean) {
-    this.recordMetric(`${name}_${success ? 'success' : 'failure'}`, 1);
+  // Record outcome counter
+  recordOutcome(name: string, outcome: string) {
+    this.recordMetric(`${name}_${outcome}`, 1);
     // Also record total
     this.recordMetric(`${name}_total`, 1);
   }
@@ -152,8 +152,52 @@ class MetricsTracker {
   }
   
   // Get all metrics data
-  getAllMetrics() {
-    return Array.from(this.metrics.values());
+  getAllMetrics(): Record<string, any> {
+    const metricsObject: Record<string, any> = {};
+    this.metrics.forEach((metric, name) => {
+      const values = metric.values.map(v => v.value);
+      if (values.length === 0) return;
+      
+      const sum = values.reduce((a, b) => a + b, 0);
+      const avg = sum / values.length;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      
+      // Calculate median (p50)
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const p50 = sorted.length % 2 === 0
+        ? (sorted[mid - 1] + sorted[mid]) / 2
+        : sorted[mid];
+      
+      // Calculate 90th percentile
+      const p90Index = Math.ceil(sorted.length * 0.9) - 1;
+      const p90 = sorted[p90Index >= 0 ? p90Index : 0];
+      
+      // Calculate 99th percentile
+      const p99Index = Math.ceil(sorted.length * 0.99) - 1;
+      const p99 = sorted[p99Index >= 0 ? p99Index : 0];
+      
+      // Calculate standard deviation
+      const variance = values.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / values.length;
+      const stddev = Math.sqrt(variance);
+      
+      metricsObject[name] = {
+        name,
+        count: values.length,
+        sum,
+        avg,
+        min,
+        max,
+        stddev,
+        p50,
+        p90,
+        p99,
+        description: metric.description,
+        unit: metric.unit
+      };
+    });
+    return metricsObject;
   }
   
   // Load metrics from disk

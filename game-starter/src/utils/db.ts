@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { dbLogger } from './dbLogger';
 import { withRetry } from './retry';
+import fs from 'fs';
 
 // Database connection pool
 let pool: Pool | null = null;
@@ -90,59 +91,115 @@ export async function saveToHistory(
     
     return result.rows[0].id;
   } catch (error) {
-    dbLogger.error(`Failed to save tweet to history: ${error.message}`, 'db');
-    throw error;
+    const err = error as Error;
+    dbLogger.error(`Failed to save tweet to history: ${err.message}`, 'db');
+    throw err;
   }
 }
 
 /**
- * Get the latest tweets from history
- * @param limit Maximum number of tweets to retrieve (default: 10)
- * @param userId Optional user ID to filter by
- * @returns Array of tweet history records
+ * Get the latest tweets from the database
+ * @deprecated Use the getLatestTweets constant function instead
  */
-export async function getLatestTweets(
-  limit: number = 10,
-  userId?: string
-): Promise<TweetHistoryRecord[]> {
+// export async function getLatestTweets(
+//   limit: number = 10,
+//   userId?: string
+// ): Promise<TweetHistoryRecord[]> {
+//   try {
+//     const pool = initDb();
+//     const query = userId
+//       ? 'SELECT * FROM tweets WHERE user_id = $1 ORDER BY timestamp DESC LIMIT $2'
+//       : 'SELECT * FROM tweets ORDER BY timestamp DESC LIMIT $1';
+//     const values = userId ? [userId, limit] : [limit];
+    
+//     const result = await withRetry(
+//       async () => await pool.query(query, values),
+//       {
+//         retries: 3,
+//         minDelay: 100,
+//         maxDelay: 1000,
+//         onRetry: (err, attempt) => {
+//           dbLogger.warn(`Retry ${attempt} getting latest tweets: ${err.message}`, 'db');
+//         }
+//       }
+//     );
+    
+//     return result.rows.map((row: any) => ({
+//       id: row.tweet_id,
+//       content: row.content,
+//       userId: row.user_id,
+//       timestamp: row.timestamp,
+//       inReplyTo: row.in_reply_to
+//     }));
+//   } catch (error) {
+//     dbLogger.error(`Failed to get latest tweets: ${error}`, 'db');
+//     return [];
+//   }
+// }
+
+// Define the Tweet interface
+export interface Tweet {
+  id: string;
+  text: string;
+  created_at: string;
+  in_reply_to_status_id?: string;
+}
+
+// Define the path for data storage
+const DATA_PATH = './data';
+
+// Define the getHistoryItems function
+export async function getHistoryItems(): Promise<any[]> {
   try {
-    const db = initDb();
-    
-    // Build the query
-    let query = `
-      SELECT id, content, user_id, timestamp, in_reply_to
-      FROM tweet_history
-    `;
-    
-    const params: any[] = [];
-    
-    if (userId) {
-      query += ' WHERE user_id = $1';
-      params.push(userId);
+    if (!fs.existsSync(`${DATA_PATH}/history.json`)) {
+      return [];
     }
+    const data = fs.readFileSync(`${DATA_PATH}/history.json`, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    dbLogger.error(`Failed to read history: ${error}`, 'db');
+    return [];
+  }
+}
+
+// Remove the duplicate getLatestTweets function
+export const getLatestTweets = async (limit: number = 10): Promise<Tweet[]> => {
+  const history = await getHistoryItems();
+  return history.slice(0, limit);
+};
+
+// Add proper error handling for the saveTweetToHistory function
+export const saveTweetToHistory = async (tweet: Tweet): Promise<void> => {
+  try {
+    // Get existing history
+    const history = await getHistoryItems();
     
-    query += ' ORDER BY timestamp DESC LIMIT $' + (params.length + 1);
-    params.push(limit);
+    // Add tweet to history
+    history.push({
+      id: tweet.id,
+      text: tweet.text,
+      createdAt: new Date().toISOString()
+    });
     
-    // Execute the query
-    const result = await withRetry(
-      () => db.query(query, params),
-      {
-        maxRetries: 3,
-        loggerTag: 'db:getLatestTweets',
-      }
+    // Sort by created date (newest first)
+    history.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    });
+    
+    // Keep only the latest 1000 tweets
+    const prunedHistory = history.slice(0, 1000);
+    
+    // Save back to file
+    fs.writeFileSync(
+      DATA_PATH,
+      JSON.stringify(prunedHistory, null, 2)
     );
     
-    // Map the results
-    return result.rows.map(row => ({
-      id: row.id,
-      content: row.content,
-      userId: row.user_id,
-      timestamp: row.timestamp,
-      inReplyTo: row.in_reply_to,
-    }));
+    dbLogger.info(`Saved tweet ${tweet.id} to history`, 'db');
   } catch (error) {
-    dbLogger.error(`Failed to get latest tweets: ${error.message}`, 'db');
-    return []; // Return empty array on error
+    const err = error as Error;
+    dbLogger.error(`Failed to save tweet to history: ${err.message}`, 'db');
   }
-} 
+}; 

@@ -1,7 +1,7 @@
 import { activity_agent, waitForAgentReady } from './agent';
 import { virtualsApiRateLimiter, twitterMentionsRateLimiter, twitterTweetsRateLimiter } from './utils/rateLimiter';
 import { ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
-import { postToTwitter } from './workers/tweetWorker';  // Import the postToTwitter function
+import { tweetWorker } from './workers/tweetWorker';  // Import the tweetWorker instead of postToTwitter
 import { initDbLogger, dbLogger } from './utils/dbLogger';  // Import the database logger
 import './healthcheck';  // Import the health check server
 
@@ -114,14 +114,22 @@ export async function postStartupTweet() {
         // Log status and post the tweet directly using the Twitter API client
         console.log(`Posting startup tweet: "${startupMessage}"`);
         
-        // Post the tweet directly instead of using the agent
-        const result = await postToTwitter(startupMessage);
+        // Post the tweet using the tweetWorker
+        const postTweetFunction = tweetWorker.functions.find(f => f.name === "post_tweet");
+        if (!postTweetFunction) {
+            throw new Error("post_tweet function not found in tweetWorker");
+        }
         
-        if (result.success) {
+        const result = await postTweetFunction.executable({
+            content: startupMessage,
+            in_reply_to: ""
+        }, (msg: string) => console.log(`Tweet worker: ${msg}`));
+        
+        if (result.status === ExecutableGameFunctionStatus.Done) {
             console.log(`✅ Startup tweet posted successfully!`);
             return true;
         } else {
-            console.error(`Error posting startup tweet: ${result.error}`);
+            console.error(`Error posting startup tweet: ${result.feedback}`);
             return false;
         }
     } catch (error) {
@@ -146,8 +154,8 @@ async function main() {
             dbLogger.info(msg, 'agent');
         });
         
-        // Log the LLM model being used
-        console.log(`Using LLM model: ${process.env.LLM_MODEL || LLMModel.Llama_3_1_405B_Instruct}`);
+        // Log configuration
+        console.log(`Using LLM model: ${process.env.LLM_MODEL || "Llama_3_1_405B_Instruct"}`);
         
         // Run the agent with a reasonable heartbeat interval (in seconds)
         // This will allow the agent to process tasks and make decisions
