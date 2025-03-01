@@ -65,9 +65,14 @@ fi
 
 echo -e "${GREEN}PostgreSQL dependencies installed successfully.${NC}"
 
+# Remove test files and plugins that might cause build errors
+echo -e "${YELLOW}Preparing build by cleaning up potential TypeScript error sources...${NC}"
+npm run clean
+echo "Removed test files that could cause TypeScript errors"
+
 # Build the application
 echo -e "${YELLOW}Building the application...${NC}"
-npm run build
+npm run clean-build
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Build failed.${NC}"

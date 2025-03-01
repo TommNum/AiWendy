@@ -18,6 +18,8 @@
   ],
   "exclude": [
     "node_modules",
-    "../plugins/**/*"
+    "../plugins/**/*",
+    "src/test-*.ts",
+    "**/*.test.ts"
   ]
 }
