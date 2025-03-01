@@ -65,6 +65,17 @@ fi
 
 echo -e "${GREEN}PostgreSQL dependencies installed successfully.${NC}"
 
+# Ensure all dependencies are properly installed
+echo -e "${YELLOW}Installing all dependencies...${NC}"
+npm install
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Failed to install dependencies.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}All dependencies installed successfully.${NC}"
+
 # Build the application
 echo -e "${YELLOW}Building the application...${NC}"
 npm run build
