@@ -25,9 +25,8 @@ WORKDIR /app
 # Copy package files first (for better layer caching)
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --no-frozen-lockfile
-RUN npm install pg @types/pg --save
+# Install dependencies - use a more reliable approach that ensures all deps are installed
+RUN npm install && npm install pg @types/pg express @types/express --save && npm install
 
 # Create a clean src directory with just what we need
 RUN mkdir -p src/utils src/workers
