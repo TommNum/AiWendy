@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, RequestHandler } from 'express';
 import http, { IncomingMessage, ServerResponse } from 'http';
 import { AsyncLocalStorage } from 'async_hooks';
 import { v4 as uuidv4 } from 'uuid';
@@ -133,7 +133,7 @@ app.get('/system', async (req, res) => {
 });
 
 // Database health check
-app.get('/db/health', async (req, res) => {
+app.get('/db/health', (async (req, res) => {
   if (!process.env.DATABASE_URL) {
     return res.status(200).json({
       status: 'not_configured',
@@ -164,7 +164,7 @@ app.get('/db/health', async (req, res) => {
       message: error instanceof Error ? error.message : String(error)
     });
   }
-});
+}) as RequestHandler);
 
 // Metrics endpoint
 app.get('/metrics', (req, res) => {
