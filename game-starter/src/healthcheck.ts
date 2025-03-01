@@ -58,7 +58,7 @@ try {
 
 // Create Express app for the main API
 const app = express();
-const port = process.env.HEALTH_PORT || 8082;
+const port = process.env.HEALTH_PORT || 8084;
 
 // Add middleware to track response time and add correlation ID
 app.use((req, res, next) => {
@@ -450,7 +450,7 @@ const server = http.createServer((req: IncomingMessage, res: ServerResponse) => 
 });
 
 // Start the health check server
-const HEALTH_PORT = process.env.HEALTH_PORT || 8082;
+const HEALTH_PORT = process.env.HEALTH_PORT || 8084;
 server.listen(HEALTH_PORT, () => {
   console.log(`Health check server is running on port ${HEALTH_PORT}`);
 });
