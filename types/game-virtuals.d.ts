@@ -163,4 +163,23 @@ declare module '../../utils/twitter' {
   export function getMentions(userId: number, count?: number): Promise<Tweet[]>;
   export function postTweet(content: string, inReplyTo?: string | null): Promise<Tweet>;
   export function replyToTweet(tweetId: string, content: string): Promise<Tweet>;
+}
+
+// Add RateLimiter declaration
+declare module './utils/rateLimiter' {
+  export class RateLimiter {
+    getToken(): Promise<void>;
+    getStatus(): { currentTokens: number, requestsThisInterval: number, maxTokens: number };
+    canTweet(): boolean;
+    markTweet(): void;
+    timeUntilNextTweet(): number;
+    schedule<T>(fn: () => Promise<T>): Promise<T>;
+  }
+  
+  export const twitterApiRateLimiter: RateLimiter;
+  export const twitterMentionsRateLimiter: RateLimiter;
+  export const virtualsApiRateLimiter: RateLimiter;
+  export const twitterRepliesRateLimiter: RateLimiter;
+  export const twitterLikesRateLimiter: RateLimiter;
+  export const twitterTweetsRateLimiter: RateLimiter;
 } 
