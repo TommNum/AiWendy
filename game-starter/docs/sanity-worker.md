@@ -12,6 +12,17 @@ Task:
 
 Example of perfect worker 
 
+import {
+  ExecutableGameFunctionResponse,
+  ExecutableGameFunctionStatus,
+  GameAgent,
+  GameFunction,
+  GameWorker,
+  LLMModel,
+} from "@virtuals-protocol/game";
+import dotenv from 'dotenv';
+import path from 'path';
+
 "// Create a worker with the functions
 const postTweetWorker = new GameWorker({
   id: "twitter_main_worker",
