@@ -36,7 +36,7 @@ TWITTER_ACCESS_TOKEN_SECRET=your_twitter_access_token_secret
 API_KEY=your_game_api_key
 
 # LLM Configuration
-LLM_MODEL=DeepSeek-R1
+LLM_MODEL=Llama-3.1-405B-Instruct
 LLM_TEMPERATURE=0.7
 LLM_MAX_TOKENS=150
 ```
@@ -53,6 +53,44 @@ This will initialize the agent and start the Twitter bot, which will:
 - Post tweets at regular intervals
 - Check for mentions and reply to them
 - Search for relevant tweets and engage with them
+
+## Deployment to Railway
+
+AiWendy can be easily deployed to [Railway](https://railway.app/), a cloud platform for deploying applications and databases.
+
+### Quick Deployment
+
+Use our deployment script to quickly deploy to Railway:
+
+```bash
+./deploy-railway.sh
+```
+
+This script will:
+1. Install Railway CLI if needed
+2. Log you into Railway
+3. Initialize a new Railway project if needed
+4. Build the application
+5. Check for a PostgreSQL database and guide you to set one up if needed
+6. Deploy the application to Railway
+
+### Viewing Database Logs
+
+Once deployed, you can view logs stored in the PostgreSQL database using our log viewer script:
+
+```bash
+./view-logs.sh
+```
+
+This interactive tool lets you:
+- View recent logs
+- Filter logs by level (error, info, etc.)
+- Filter logs by source (tweet-worker, etc.)
+- Run custom SQL queries on the logs table
+
+### Manual Deployment
+
+For more detailed instructions on deploying to Railway, see our [Railway Deployment Guide](RAILWAY_DEPLOYMENT.md).
 
 ## Testing
 
@@ -148,6 +186,22 @@ The application uses the DeepSeek-R1 LLM model to generate tweets and replies. T
    - Check the logs for detailed error messages
    - Run the worker functionality test to verify initialization
    - Ensure all required environment variables are set
+
+### Railway Deployment Issues
+
+1. **Database Connection Errors**:
+   - Verify that the `DATABASE_URL` environment variable is set correctly in Railway
+   - Check if the PostgreSQL database is properly provisioned
+   - Check the application logs for database connection errors
+
+2. **Deployment Failures**:
+   - Check the build logs in Railway for errors
+   - Verify that all required environment variables are set in Railway
+   - Make sure the Dockerfile is correctly configured
+
+3. **Performance Issues**:
+   - Consider upgrading your Railway plan if you're experiencing resource constraints
+   - Monitor database usage and consider optimizing queries or adding indexes
 
 ## License
 

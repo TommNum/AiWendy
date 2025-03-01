@@ -215,4 +215,7 @@ export const twitterRepliesRateLimiter = new RateLimiter(50, 60, "Twitter Replie
 export const twitterLikesRateLimiter = new RateLimiter(200, 24 * 60, "Twitter Likes");
 
 // Tweets rate limiter - 100 per 24 hours (Basic tier)
-export const twitterTweetsRateLimiter = new RateLimiter(100, 24 * 60, "Twitter Tweets"); 
+export const twitterTweetsRateLimiter = new RateLimiter(100, 24 * 60, "Twitter Tweets");
+
+// Original tweets rate limiter - 1 every 2 hours
+export const twitterOriginalTweetsRateLimiter = new RateLimiter(1, 120, "Twitter Original Tweets"); 
