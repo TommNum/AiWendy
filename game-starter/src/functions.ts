@@ -122,6 +122,12 @@ function createGameClient(apiKey: string): GameClient {
                     })
                 });
                 
+                // Handle 204 No Content responses
+                if (response.status === 204) {
+                    console.log("LLM API returned 204 No Content - no response to parse");
+                    return ""; // Return empty string to trigger fallback
+                }
+                
                 if (!response.ok) {
                     throw new Error(`LLM API error: ${response.status} ${response.statusText}`);
                 }
