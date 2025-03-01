@@ -32,12 +32,10 @@ RUN npm install pg @types/pg --save
 # Create a clean src directory with just what we need
 RUN mkdir -p src/utils src/workers
 
-# Copy only necessary files, avoiding plugins and test files completely
+# Copy only necessary files, avoiding plugins completely
 COPY src/*.ts ./src/
 COPY src/utils/*.ts ./src/utils/
 COPY src/workers/*.ts ./src/workers/
-# Exclude test files
-RUN find ./src -name "test-*.ts" -delete
 COPY tsconfig.json ./
 COPY .env* ./
 
@@ -45,7 +43,7 @@ COPY .env* ./
 RUN mkdir -p ./data ./logs
 
 # Build the project
-RUN npm run clean-build
+RUN npm run build
 
 # Remove dev dependencies
 RUN npm prune --production

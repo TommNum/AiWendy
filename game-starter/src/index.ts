@@ -140,6 +140,19 @@ async function main() {
         dbLogger.info("Starting Wendy agent initialization", "main");
         await waitForAgentReady();
         
+        // Set up custom logger for better visibility
+        activity_agent.setLogger((agent, msg) => {
+            console.log(`[${agent.name}] ${msg}`);
+            dbLogger.info(msg, 'agent');
+        });
+        
+        // Log the LLM model being used
+        console.log(`Using LLM model: ${process.env.LLM_MODEL || LLMModel.Llama_3_1_405B_Instruct}`);
+        
+        // Run the agent with a reasonable heartbeat interval (in seconds)
+        // This will allow the agent to process tasks and make decisions
+        await activity_agent.run(30, { verbose: true });
+        
         // Create and configure the task scheduler
         const scheduler = new TaskScheduler();
         

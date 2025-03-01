@@ -1,46 +1,40 @@
 # .dockerignore
 
-# Node modules and development artifacts
+# Node modules
 node_modules
-npm-debug.log
-yarn-debug.log
-yarn-error.log
 
-# Build output
+# Plugins directory (has TypeScript errors)
+plugins/
+
+# Build artifacts
 dist
-*.tsbuildinfo
+*.log
 
-# Test files
-src/test-*.ts
-**/*.test.ts
-
-# Plugins directory
-../plugins
-plugins
-
-# Environment variables and sensitive files
-.env
-.env.local
-.env.development
-.env.test
-.env.production
-
-# Git and other version control
+# Git files
 .git
 .gitignore
-.gitattributes
 
-# Editor-specific files
+# Environment files (except .env.example)
+.env*
+!.env.example
+
+# IDE files
+.vscode
+.idea
+
+# Temporary files
+*.tmp
+*.temp
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+.DS_Store
+
+# Ignore IDE and editor config files
 .vscode
 .idea
 *.swp
-*.swo
 
-# Logs
-logs
-*.log
-
-# Miscellaneous
-.DS_Store
-.dockerignore
-README.md
+# Ignore build artifacts from the host
+build

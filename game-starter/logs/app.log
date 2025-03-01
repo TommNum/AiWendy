@@ -6421,3 +6421,20 @@ Require stack:
 [WARN] 2025-02-28T20:47:11.447Z - Some recommended environment variables for LLM usage are missing
 [INFO] 2025-02-28T20:47:11.447Z - ✅ Basic LLM configuration test passed (API key is set)
 [INFO] 2025-02-28T20:47:11.447Z - ✅ LLM usage test completed successfully
+[WARN] 2025-03-01T05:38:14.005Z - Retry attempt 1/3 for operation
+[WARN] 2025-03-01T05:38:16.099Z - Retry attempt 2/3 for operation
+[WARN] 2025-03-01T05:38:20.179Z - Retry attempt 3/3 for operation
+[ERROR] 2025-03-01T05:38:20.182Z - Operation failed after 3 retries. Final error: Cannot read properties of undefined (reading 'post')
+[WARN] 2025-03-01T05:38:20.189Z - Retry attempt 1/3 for operation
+[WARN] 2025-03-01T05:38:22.205Z - Retry attempt 2/3 for operation
+[WARN] 2025-03-01T05:38:26.232Z - Retry attempt 3/3 for operation
+[ERROR] 2025-03-01T05:38:26.236Z - Operation failed after 3 retries. Final error: Cannot read properties of undefined (reading 'post')
+[WARN] 2025-03-01T05:38:26.256Z - Retry attempt 1/2 for operation
+[WARN] 2025-03-01T05:38:28.334Z - Retry attempt 2/2 for operation
+[ERROR] 2025-03-01T05:38:28.338Z - Operation failed after 2 retries. Final error: Cannot read properties of undefined (reading 'get')
+[WARN] 2025-03-01T05:38:28.343Z - Retry attempt 1/2 for operation
+[WARN] 2025-03-01T05:38:30.401Z - Retry attempt 2/2 for operation
+[ERROR] 2025-03-01T05:38:30.404Z - Operation failed after 2 retries. Final error: Cannot read properties of undefined (reading 'get')
+[INFO] 2025-03-01T05:44:39.188Z - Processing tweet request: Testing the tweet workflow...
+[INFO] 2025-03-01T05:44:39.191Z - Processing tweet request: Testing the tweet workflow wit...
+[ERROR] 2025-03-01T05:44:39.193Z - Tweet worker error: Twitter API Error

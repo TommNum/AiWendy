@@ -8,6 +8,7 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { twitterApiRateLimiter, twitterRepliesRateLimiter } from "../utils/rateLimiter";
+import { activity_agent } from '../agent';
 
 // Add debug message to verify the module is loaded
 console.log('🏛️ Initializing DAO engagement functionality...');
@@ -231,87 +232,50 @@ const analyzeTweetSentiment = new GameFunction({
             
             logger(`Analyzing sentiment for tweet: ${args.tweet_text}`);
             
-            // If we have the API key, we'll use the Virtuals API for sentiment analysis
-            if (process.env.API_KEY) {
-                // Prompt for LLM sentiment analysis
-                const prompt = `
-                Analyze the sentiment of the following tweet about DAOs, Web3, or blockchain technology. 
-                Classify it as one of: POSITIVE, NEGATIVE, CURIOUS, or NEUTRAL.
-                
-                Tweet: "${args.tweet_text}"
-                
-                Return ONLY the sentiment label with no additional text. For example: POSITIVE
-                `;
-                
-                // Call the Virtuals API
-                const response = await fetch("https://api.virtuals.io/api/v0/ai/tasks", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${process.env.API_KEY}`
-                    },
-                    body: JSON.stringify({
-                        messages: [{ role: "user", content: prompt }],
-                        model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct"
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to analyze sentiment: ${response.status} ${response.statusText}`);
-                }
-                
-                const data = await response.json();
-                let sentiment = data.choices[0].message.content.trim().toUpperCase();
-                
-                // Validate the sentiment
-                if (!["POSITIVE", "NEGATIVE", "CURIOUS", "NEUTRAL"].includes(sentiment)) {
-                    // Default to NEUTRAL if we get an invalid response
-                    sentiment = "NEUTRAL";
-                }
-                
-                logger(`Detected sentiment: ${sentiment}`);
-                
-                return new ExecutableGameFunctionResponse(
-                    ExecutableGameFunctionStatus.Done,
-                    sentiment
-                );
-            } else {
-                // Fallback to rule-based sentiment analysis
-                const text = args.tweet_text.toLowerCase();
-                let sentiment = "NEUTRAL"; // Default
-                
-                // Check for positive indicators
-                if (text.includes("love") || 
-                    text.includes("great") || 
-                    text.includes("amazing") || 
-                    text.includes("exciting") || 
-                    text.includes("bullish")) {
-                    sentiment = "POSITIVE";
-                }
-                // Check for negative indicators
-                else if (text.includes("hate") || 
-                         text.includes("terrible") || 
-                         text.includes("scam") || 
-                         text.includes("fail") || 
-                         text.includes("bearish")) {
-                    sentiment = "NEGATIVE";
-                }
-                // Check for curious indicators
-                else if (text.includes("?") || 
-                         text.includes("how") || 
-                         text.includes("what") || 
-                         text.includes("why") || 
-                         text.includes("curious")) {
-                    sentiment = "CURIOUS";
-                }
-                
-                logger(`Detected sentiment (rule-based): ${sentiment}`);
-                
-                return new ExecutableGameFunctionResponse(
-                    ExecutableGameFunctionStatus.Done,
-                    sentiment
-                );
+            // Create a prompt for sentiment analysis
+            const sentimentPrompt = `
+            Analyze the sentiment of the following tweet about DAOs, Web3, or blockchain technology. 
+            Classify it as one of: POSITIVE, NEGATIVE, CURIOUS, or NEUTRAL.
+            
+            Tweet: "${args.tweet_text}"
+            
+            Return ONLY the sentiment label with no additional text. For example: POSITIVE
+            `;
+            
+            // Create a task for sentiment analysis
+            const submissionId = await activity_agent.gameClient.setTask(
+                activity_agent.agentId!, 
+                sentimentPrompt
+            );
+            
+            // Get a worker for processing
+            const worker = activity_agent.getWorkerById(activity_agent.workers[0].id);
+            const environment = worker.getEnvironment ? await worker.getEnvironment() : {};
+            
+            // Use the GameClient to get the sentiment analysis
+            const action = await activity_agent.gameClient.getTaskAction(
+                activity_agent.agentId!,
+                submissionId,
+                worker,
+                null, // No previous result
+                environment
+            );
+            
+            // Extract the sentiment from the action
+            let sentiment = (action.action_args.thought || "NEUTRAL").trim().toUpperCase();
+            
+            // Validate the sentiment
+            if (!["POSITIVE", "NEGATIVE", "CURIOUS", "NEUTRAL"].includes(sentiment)) {
+                // Default to NEUTRAL if we get an invalid response
+                sentiment = "NEUTRAL";
             }
+            
+            logger(`Detected sentiment: ${sentiment}`);
+            
+            return new ExecutableGameFunctionResponse(
+                ExecutableGameFunctionStatus.Done,
+                sentiment
+            );
         } catch (e) {
             return new ExecutableGameFunctionResponse(
                 ExecutableGameFunctionStatus.Failed,

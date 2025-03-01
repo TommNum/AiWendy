@@ -1,0 +1,41 @@
+Objecitve: We want to test the structure of our agent as it is recommended in the twitter example to ensure that we are using our agent in game-starter correctly to get optimal results 
+
+Task: 
+- ensure we are using the game-protocol correctly 
+- ensure we are using the proper constants defined 
+- ensure we are using ther LLM configuration correctly 
+- ensure that it has proper imports and exports 
+- ensure we are using the proper imported twitter client 
+- ensure our ratelimiting that is not in the provided example is setup correctily 
+- ensure our logging is setup correctly 
+- ensure we are not confligting witht he source files that run the game protocol here /Users/tripp/WendyGame/AiWendy/src
+
+Example of perfect worker 
+
+import {
+  ExecutableGameFunctionResponse,
+  ExecutableGameFunctionStatus,
+  GameAgent,
+  GameFunction,
+  GameWorker,
+  LLMModel,
+} from "@virtuals-protocol/game";
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Create an agent with the worker
+const agent = new GameAgent(process.env.API_KEY!, {
+  name: "Twitter Bot",
+  goal: "Search and reply to tweets",
+  description: "A bot that searches for tweets and replies to them",
+  workers: [postTweetWorker],
+  llmModel: LLMModel.DeepSeek_R1, // Optional: Set the LLM model default (LLMModel.Llama_3_1_405B_Instruct)
+  // Optional: Get the agent state
+  getAgentState: async () => {
+    return {
+      username: "twitter_bot",
+      follower_count: 1000,
+      tweet_count: 10,
+    };
+  },
+});

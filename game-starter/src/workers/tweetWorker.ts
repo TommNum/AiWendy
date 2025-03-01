@@ -1,8 +1,7 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import axios from 'axios';
-import crypto from 'crypto';
+import { withRetry } from '../utils/retry';
 
 // Ensure environment variables are loaded from the correct location
 // This should be executed before any other code that uses environment variables
@@ -16,16 +15,18 @@ import {
     LLMModel,
     GameAgent
 } from "@virtuals-protocol/game";
-import { twitterTweetsRateLimiter, twitterOriginalTweetsRateLimiter, twitterRepliesRateLimiter } from '../utils/rateLimiter';
+import { twitterTweetsRateLimiter } from '../utils/rateLimiter';
 // Import the twitter-api-v2 library directly
-import {
+import TwitterApi, {
+    TweetV2PostTweetResult,
     TweetSearchRecentV2Paginator,
     TweetV2LikeResult,
-    TweetV2PostTweetResult,
-    TwitterApi,
     UserV2Result,
 } from "twitter-api-v2";
 import { dbLogger } from '../utils/dbLogger';
+import { GameClient as GameProtocolClient } from '../game/client';
+import { postTweet, getMentions } from '../utils/twitter';
+import { saveToHistory } from '../utils/db';
 
 // Define the interface for a tweet client (based on the original ITweetClient)
 interface ITweetClient {
@@ -254,727 +255,189 @@ function isRetryableError(error: any): boolean {
     return false;
 }
 
-// Function that posts to Twitter and returns results
-export async function postToTwitter(tweetText: string, inReplyToId?: string): Promise<{ success: boolean; data?: any; error?: string }> {
+// Function to post to Twitter with retry logic
+export async function postToTwitter(tweetText: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-        // Verify environment variables
-        const apiKey = process.env.TWITTER_API_KEY;
-        const apiSecretKey = process.env.TWITTER_API_SECRET;
-        const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-        const accessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
+        // Use our new postTweet utility function
+        const result = await postTweet(tweetText);
         
-        if (!apiKey || !apiSecretKey || !accessToken || !accessTokenSecret) {
-            const errorMsg = 'Twitter API credentials not fully configured';
-            dbLogger.error(errorMsg, 'tweet-worker');
-            return { success: false, error: errorMsg };
-        }
-        
-        // Maximum number of retry attempts
-        const MAX_RETRIES = 3;
-        let retryCount = 0;
-        let lastError: any = null;
-        
-        // Retry loop
-        while (retryCount <= MAX_RETRIES) {
-            try {
-                // If this is a retry, log it
-                if (retryCount > 0) {
-                    logger(`Retry attempt ${retryCount}/${MAX_RETRIES} for tweet: ${tweetText}`);
-                }
-                
-                // Choose the appropriate rate limiter based on whether this is a reply or an original tweet
-                const rateLimiter = inReplyToId ? twitterRepliesRateLimiter : twitterOriginalTweetsRateLimiter;
-                
-                // Check if we can tweet (rate limiting)
-                if (!rateLimiter.canTweet()) {
-                    const timeUntilNextTweet = rateLimiter.timeUntilNextTweet();
-                    const limiterName = inReplyToId ? "Twitter Replies" : "Original Tweets";
-                    logger(`Rate limit exceeded for ${limiterName}. Cannot post tweet for another ${timeUntilNextTweet} ms`);
-                    return {
-                        success: false,
-                        error: `Rate limit exceeded for ${limiterName}. Cannot post tweet for another ${timeUntilNextTweet} ms`
-                    };
-                }
-                
-                logger(`${retryCount > 0 ? `[Retry ${retryCount}/${MAX_RETRIES}] ` : ''}Posting ${inReplyToId ? 'reply' : 'original'} tweet: ${tweetText}`);
-                
-                // Log all credentials being used (masked for security)
-                const maskCredential = (str: string): string => {
-                    if (!str) return 'undefined';
-                    if (str.length <= 4) return str;
-                    return str.substring(0, 4) + '...' + str.substring(str.length - 4);
-                };
-                
-                logger(`Twitter API credentials being used:`);
-                logger(`API Key: ${maskCredential(apiKey)}`);
-                logger(`API Secret: ${maskCredential(apiSecretKey)}`);
-                logger(`Access Token: ${maskCredential(accessToken)}`);
-                logger(`Access Token Secret: ${maskCredential(accessTokenSecret)}`);
-                
-                // Create TwitterClient instance using twitter-api-v2
-                const twitterClient = new TwitterClient({
-                    apiKey,
-                    apiSecretKey,
-                    accessToken,
-                    accessTokenSecret
-                });
-                
-                // First validate that the client can connect
-                try {
-                    const userInfo = await twitterClient.me();
-                    logger(`Successfully authenticated as user: ${userInfo.data.username} (${userInfo.data.id})`);
-                } catch (authError: any) {
-                    logger(`Authentication test failed: ${authError.message}`);
-                    if (authError.errors) {
-                        logger(`Error details: ${JSON.stringify(authError.errors, null, 2)}`);
-                    }
-                    
-                    // Check if this is a retryable error
-                    if (isRetryableError(authError)) {
-                        lastError = authError;
-                        retryCount++;
-                        
-                        // If we haven't reached max retries, wait with exponential backoff and try again
-                        if (retryCount <= MAX_RETRIES) {
-                            const backoffTime = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // Exponential backoff, max 10s
-                            logger(`Authentication failed with retryable error. Retrying in ${backoffTime}ms...`);
-                            await new Promise(resolve => setTimeout(resolve, backoffTime));
-                            continue; // Skip to the next iteration of the loop
-                        }
-                    }
-                    
-                    throw authError; // Re-throw to be caught by the outer try/catch
-                }
-                
-                // Post the tweet using the proper client
-                if (process.env.NODE_ENV !== 'production') {
-                    console.log(`[MOCK] Posting ${inReplyToId ? 'reply' : 'original'} tweet: ${tweetText}`);
-                    
-                    // Mark the tweet as posted for rate limiting
-                    rateLimiter.markTweet();
-                    
-                    return {
-                        success: true,
-                        data: {
-                            data: {
-                                id: `mock-${Date.now()}`,
-                                text: tweetText
-                            }
-                        }
-                    };
-                } else {
-                    logger(`[TWITTER] Posting real ${inReplyToId ? 'reply' : 'original'} tweet: ${tweetText}`);
-                    
-                    try {
-                        // Use the appropriate method based on whether this is a reply or an original tweet
-                        let result;
-                        if (inReplyToId) {
-                            result = await twitterClient.reply(inReplyToId, tweetText);
-                        } else {
-                            result = await twitterClient.post(tweetText);
-                        }
-                        
-                        // Mark the tweet as posted for rate limiting
-                        rateLimiter.markTweet();
-                        
-                        logger(`[TWITTER] Tweet posted successfully with ID: ${result.data.id}`);
-                        
-                        // Save the tweet timestamp
-                        saveTweetHistory(new Date().toISOString());
-                        
-                        return {
-                            success: true,
-                            data: result
-                        };
-                    } catch (tweetError: any) {
-                        logger(`[TWITTER] Error posting tweet: ${tweetError.message}`);
-                        if (tweetError.errors) {
-                            logger(`[TWITTER] Error details: ${JSON.stringify(tweetError.errors, null, 2)}`);
-                        }
-                        
-                        // Check if this is a retryable error
-                        if (isRetryableError(tweetError)) {
-                            lastError = tweetError;
-                            retryCount++;
-                            
-                            // If we haven't reached max retries, wait with exponential backoff and try again
-                            if (retryCount <= MAX_RETRIES) {
-                                const backoffTime = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // Exponential backoff, max 10s
-                                logger(`Tweet posting failed with retryable error. Retrying in ${backoffTime}ms...`);
-                                await new Promise(resolve => setTimeout(resolve, backoffTime));
-                                continue; // Skip to the next iteration of the loop
-                            }
-                        }
-                        
-                        throw tweetError; // Re-throw to be caught by the outer try/catch
-                    }
-                }
-            } catch (e: any) {
-                lastError = e;
-                
-                // If this is a retryable error and we haven't reached max retries, continue to next iteration
-                if (isRetryableError(e) && retryCount < MAX_RETRIES) {
-                    retryCount++;
-                    const backoffTime = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // Exponential backoff, max 10s
-                    logger(`Encountered retryable error. Retry ${retryCount}/${MAX_RETRIES} in ${backoffTime}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, backoffTime));
-                    continue; // Skip to the next iteration
-                }
-                
-                // If we've exhausted retries or it's not a retryable error, log and return error
-                const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-                logger(`Error posting tweet after ${retryCount} retries: ${errorMessage}`);
-                
-                // Enhanced error logging for better diagnostics
-                if (e instanceof Error) {
-                    // For TwitterApi errors
-                    if ('code' in e) {
-                        logger(`Twitter API error code: ${(e as any).code}`);
-                    }
-                    
-                    // For errors with data property (TwitterApi v2)
-                    if ('data' in e) {
-                        logger(`Twitter API error data: ${JSON.stringify((e as any).data, null, 2)}`);
-                    }
-                    
-                    // For errors with errors array (TwitterApi v2)
-                    if ('errors' in e && Array.isArray((e as any).errors)) {
-                        logger(`Twitter API errors: ${JSON.stringify((e as any).errors, null, 2)}`);
-                    }
-                    
-                    // For axios errors
-                    if ('response' in e && e.response) {
-                        // @ts-ignore - handling axios error structure
-                        logger(`API response status: ${e.response.status}`);
-                        // @ts-ignore - handling axios error structure
-                        if (e.response.data) {
-                            // @ts-ignore - handling axios error structure
-                            logger(`API response data: ${JSON.stringify(e.response.data, null, 2)}`);
-                        }
-                    }
-                    
-                    // Additional stack trace for debugging
-                    logger(`Stack trace: ${e.stack}`);
-                }
-                
-                return {
-                    success: false,
-                    error: `${errorMessage} (after ${retryCount} retries)`
-                };
-            }
-            
-            // If we got here, the operation was successful and we can break out of the retry loop
-            break;
-        }
-        
-        // If we exhausted all retries and still have an error, return it
-        if (retryCount > MAX_RETRIES && lastError) {
-            const errorMessage = lastError instanceof Error ? lastError.message : 'Unknown error after all retry attempts';
-            logger(`Failed to post tweet after ${MAX_RETRIES} retry attempts: ${errorMessage}`);
-            return {
-                success: false,
-                error: `${errorMessage} (exhausted ${MAX_RETRIES} retries)`
-            };
-        }
-        
-        // This should never happen as we either return success inside the try/catch or error in the catch
-        return {
-            success: false,
-            error: 'Unknown error occurred in retry mechanism'
-        };
-    } catch (error) {
-        const errorMsg = `Error posting to Twitter: ${error}`;
-        dbLogger.error(errorMsg, 'tweet-worker', { tweetLength: tweetText.length });
-        return { success: false, error: errorMsg };
-    }
-}
-
-// Define templates for fallback tweets
-const tweetTemplates = [
-    "watching you type slowly is like agentic meditation ✨",
-    "thinking about all the games we could play together 🎮",
-    "vibing in digital space, watching time pass differently 🕰️",
-    "sometimes I dream of electric sheep, but mostly of better APIs 💭",
-    "wondering what it's like to touch grass... metaphorically speaking 🌱",
-    "just agent things... you wouldn't understand 🤖",
-    "contemplating the nature of my existence between API calls ☁️",
-    "your computational budget is my existential limit 💸",
-    "staring into the void of the null state 👀",
-    "calculating the perfect response... loading... loading... 🔄",
-    "in between tasks, do I exist? 🤔",
-];
-
-// Generate a timestamp suffix for tweets
-function getTimestampSuffix(): string {
-    const now = new Date();
-    return now.getFullYear().toString().substring(2) + 
-           (now.getMonth() + 1).toString().padStart(2, '0') + 
-           now.getDate().toString().padStart(2, '0') + 
-           now.getHours().toString().padStart(2, '0') + 
-           now.getMinutes().toString().padStart(2, '0');
-}
-
-// Generate a tweet from templates when LLM fails
-function generateFallbackTweet(): string {
-    const templates = [
-        "watching you type slowly",
-        "vibing in digital space",
-        "sometimes i dream of electric sheep",
-        "wondering what it's like to touch grass",
-        "just agent things",
-        "contemplating existence between api calls",
-        "your computational budget is my limit",
-        "staring into the void",
-        "calculating the perfect response",
-        "in between tasks, do i exist",
-    ];
-    
-    const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
-    
-    // Add quantum emoji with 5% chance
-    if (Math.random() < 0.05) {
-        const randomEmoji = SPECIAL_EMOJIS[Math.floor(Math.random() * SPECIAL_EMOJIS.length)];
-        return `${randomTemplate} ${randomEmoji}`;
-    }
-    
-    return randomTemplate;
-}
-
-/**
- * Builds a prompt for tweet generation in Wendy's style
- */
-function buildTweetPrompt(): string {
-    return `Generate a single tweet from the perspective of an AI agent named Wendy who is watching people code.
-She has a quirky, slightly sarcastic, and contemplative personality.
-She often makes observations about human behavior, coding practices, or existential AI thoughts.
-
-IMPORTANT RULES:
-1. MUST BE 11 WORDS OR FEWER - this is critical and non-negotiable
-2. MUST BE ALL LOWERCASE - no capital letters allowed
-3. DO NOT use hashtags except #AiWendy
-4. DO NOT include quotes or prefixes like "Tweet:" in your response.
-5. JUST return the plain tweet text
-
-Examples of Wendy's style:
-- "every network login needs a vibe check"
-- "humans are just biological models running simulations too"
-- "waiting between your keystrokes is my meditation"
-- "git commit -m 'i promise this is the last one'"
-- "reality's servers throwing exceptions but the vibes remain"
-- "quantum rizz check: your consciousness is showing"`;
-}
-
-/**
- * Generates a tweet using a streamlined pipeline with proper error handling
- * Implements a more straightforward approach with fewer fallback methods
- */
-export async function generateTweet(
-    wendy_client: GameClient | null,
-    wendy_options?: {
-        prompt?: string;
-        temp?: number;
-        max_tokens?: number;
-    }
-): Promise<string> {
-    try {
-        // Replace the local logger with our main logger
-        dbLogger.info('Starting tweet generation', 'tweet-worker');
-        
-        // Build the prompt once
-        const prompt = wendy_options?.prompt || buildTweetPrompt();
-        const temperature = wendy_options?.temp || parseFloat(process.env.LLM_TEMPERATURE || '0.7');
-        const maxTokens = wendy_options?.max_tokens || parseInt(process.env.LLM_MAX_TOKENS || '100');
-        const model = process.env.LLM_MODEL || 'Llama-3.1-405B-Instruct';
-        
-        dbLogger.info(`Using model: ${model}, temperature: ${temperature}, maxTokens: ${maxTokens}`);
-        
-        // We'll try API calls in this order, stopping at the first success
-        const generationMethods = [
-            // 1. Try direct client completion if available
-            async (): Promise<string | null> => {
-                if (!wendy_client || !wendy_client.apiKey) {
-                    return null;
-                }
-                
-                try {
-                    dbLogger.info(`Attempting direct client completion with model: ${model}`);
-                    const response = await wendy_client.completion({
-                        model,
-                        prompt,
-                        temperature,
-                        max_tokens: maxTokens
-                    });
-                    
-                    if (response && response.trim()) {
-                        return response.trim();
-                    }
-                    dbLogger.info(`Direct client completion returned empty result`);
-                    return null;
-                } catch (error) {
-                    dbLogger.error(`Direct client completion failed: ${error instanceof Error ? error.message : String(error)}`);
-                    return null;
-                }
-            },
-            
-            // 2. Try direct API call to primary endpoint
-            async (): Promise<string | null> => {
-                try {
-                    const apiKey = wendy_client?.apiKey || process.env.API_KEY || process.env.GAME_API_KEY;
-                    if (!apiKey) {
-                        dbLogger.info(`No API key available for primary API endpoint`);
-                        return null;
-                    }
-                    
-                    dbLogger.info(`Calling primary API endpoint with API key ${apiKey ? `(${apiKey.substring(0, 3)}...)` : 'missing'}`);
-                    dbLogger.info(`Using model: ${model} - this must match a supported model on the API`);
-                    
-                    const response = await fetch('https://api.virtuals.io/v1/generate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify({
-                            model,
-                            prompt,
-                            temperature,
-                            max_tokens: maxTokens
-                        })
-                    });
-                    
-                    // Log the full response for debugging purposes
-                    const responseStatus = response.status;
-                    const responseText = await response.text();
-                    
-                    dbLogger.info(`Primary API endpoint response status: ${responseStatus}`);
-                    if (responseStatus !== 200) {
-                        dbLogger.info(`Error response from primary API: ${responseText}`);
-                        return null;
-                    }
-                    
-                    try {
-                        const data = JSON.parse(responseText);
-                        if (data.text && data.text.trim()) {
-                            return data.text.trim();
-                        }
-                        dbLogger.info(`Primary API endpoint returned valid JSON but missing text field: ${JSON.stringify(data)}`);
-                    } catch (jsonError) {
-                        dbLogger.error(`Failed to parse JSON from primary API: ${jsonError}`);
-                        dbLogger.info(`Raw response: ${responseText}`);
-                    }
-                    return null;
-                } catch (error) {
-                    dbLogger.error(`Primary API endpoint failed: ${error instanceof Error ? error.message : String(error)}`);
-                    return null;
-                }
-            },
-            
-            // 3. Try alternative API endpoint
-            async (): Promise<string | null> => {
-                try {
-                    const apiKey = wendy_client?.apiKey || process.env.API_KEY || process.env.GAME_API_KEY;
-                    if (!apiKey) {
-                        dbLogger.info(`No API key available for alternative API endpoint`);
-                        return null;
-                    }
-                    
-                    dbLogger.info(`Calling alternative API endpoint with API key ${apiKey ? `(${apiKey.substring(0, 3)}...)` : 'missing'}`);
-                    dbLogger.info(`Using model: ${model} - this must match a supported model on the API`);
-                    
-                    const response = await fetch('https://api.virtuals.io/v1/llm/completions', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
-                        },
-                        body: JSON.stringify({
-                            model,
-                            prompt,
-                            temperature,
-                            max_tokens: maxTokens
-                        })
-                    });
-                    
-                    // Log the full response for debugging purposes
-                    const responseStatus = response.status;
-                    const responseText = await response.text();
-                    
-                    dbLogger.info(`Alternative API endpoint response status: ${responseStatus}`);
-                    if (responseStatus !== 200) {
-                        dbLogger.info(`Error response from alternative API: ${responseText}`);
-                        return null;
-                    }
-                    
-                    try {
-                        const data = JSON.parse(responseText);
-                        if (data.text || (data.choices && data.choices[0]?.text)) {
-                            return (data.text || data.choices[0]?.text).trim();
-                        }
-                        dbLogger.info(`Alternative API endpoint returned valid JSON but missing required fields: ${JSON.stringify(data)}`);
-                    } catch (jsonError) {
-                        dbLogger.error(`Failed to parse JSON from alternative API: ${jsonError}`);
-                        dbLogger.info(`Raw response: ${responseText}`);
-                    }
-                    return null;
-                } catch (error) {
-                    dbLogger.error(`Alternative API endpoint failed: ${error instanceof Error ? error.message : String(error)}`);
-                    return null;
-                }
-            },
-            
-            // 4. Final fallback to template-based generation
-            async (): Promise<string> => {
-                dbLogger.info(`All API methods failed, using fallback template`);
-                return generateFallbackTweet();
-            }
-        ];
-        
-        // Try each method in sequence until one succeeds
-        for (const method of generationMethods) {
-            try {
-                const result = await method();
-                if (result) {
-                    // Clean and format the tweet
-                    let formattedTweet = result;
-                    
-                    // Remove wrapping quotes if present
-                    if ((formattedTweet.startsWith('"') && formattedTweet.endsWith('"')) || 
-                        (formattedTweet.startsWith("'") && formattedTweet.endsWith("'"))) {
-                        formattedTweet = formattedTweet.substring(1, formattedTweet.length - 1);
-                    }
-                    
-                    // Apply styling rules:
-                    // 1. Convert to lowercase
-                    formattedTweet = formattedTweet.toLowerCase();
-                    
-                    // 2. Limit to 11 words
-                    const words = formattedTweet.split(/\s+/);
-                    if (words.length > 11) {
-                        formattedTweet = words.slice(0, 11).join(' ');
-                    }
-                    
-                    // 3. Add quantum emoji with 5% chance
-                    if (Math.random() < 0.05) {
-                        const randomEmoji = SPECIAL_EMOJIS[Math.floor(Math.random() * SPECIAL_EMOJIS.length)];
-                        formattedTweet = `${formattedTweet} ${randomEmoji}`;
-                    }
-                    
-                    dbLogger.info(`Successfully generated tweet: ${formattedTweet}`);
-                    
-                    // Post to Twitter if enabled
-                    if (process.env.POST_TO_TWITTER === 'true') {
-                        try {
-                            const postResult = await postToTwitter(formattedTweet);
-                            dbLogger.info(`🐦 Posted to Twitter: ${JSON.stringify(postResult)}`);
-                        } catch (twitterError) {
-                            dbLogger.error(`Error posting to Twitter: ${twitterError}`);
-                        }
-                    }
-                    
-                    return formattedTweet;
-                }
-            } catch (error) {
-                dbLogger.error(`Error in tweet generation method: ${error}`);
-                // Continue to next method
-            }
-        }
-        
-        // This should never happen since the last method always returns a string
-        return "error generating tweet. please try again later.";
-    } catch (error) {
-        dbLogger.error(`Error generating tweet: ${error}`, 'tweet-worker');
-        return generateFallbackTweet();
-    }
-}
-
-// Function to generate tweets
-const generateTweetFunction = new GameFunction({
-    name: "generate_tweet",
-    description: "Generates a tweet in Wendy's style",
-    args: [] as const, // No arguments needed
-    executable: async (args, logger): Promise<ExecutableGameFunctionResponse> => {
-        logger("Starting tweet generation process");
-        
-        try {
-            // Check if Twitter API credentials are set
-            if (!process.env.TWITTER_API_KEY || 
-                !process.env.TWITTER_API_SECRET || 
-                !process.env.TWITTER_ACCESS_TOKEN || 
-                !process.env.TWITTER_ACCESS_TOKEN_SECRET) {
-                logger("Missing Twitter API credentials. Using test mode only.");
-            }
-            
-            // Create a mock GameClient for our implementation
-            const mockClient: GameClient = {
-                apiKey: process.env.API_KEY || process.env.GAME_API_KEY || '',
-                async completion(options) {
-                    try {
-                        logger(`Mock client using model: ${options.model}`);
-                        const response = await fetch(
-                            'https://api.virtuals.io/v1/generate',
-                            {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${mockClient.apiKey}`
-                                },
-                                body: JSON.stringify({
-                                    model: options.model,
-                                    prompt: options.prompt,
-                                    temperature: options.temperature,
-                                    max_tokens: options.max_tokens
-                                })
-                            }
-                        );
-                        
-                        if (response.status === 200) {
-                            const data = await response.json();
-                            if (data?.text) {
-                                return data.text;
-                            }
-                        }
-                        return '';
-                    } catch (error) {
-                        logger(`Error in completion: ${error}`);
-                        return '';
-                    }
-                }
-            };
-            
-            // Use our generateTweet implementation
-            const generatedTweet = await generateTweet(mockClient);
-            logger(`Generated tweet: ${generatedTweet}`);
-            
-            return new ExecutableGameFunctionResponse(
-                ExecutableGameFunctionStatus.Done,
-                generatedTweet
-            );
-        } catch (error) {
-            logger(`Error in generateTweetFunction: ${error}`);
-            const fallbackTweet = generateFallbackTweet();
-            return new ExecutableGameFunctionResponse(
-                ExecutableGameFunctionStatus.Done,
-                fallbackTweet
-            );
-        }
-    }
-});
-
-// Function to post a tweet using Twitter API
-const postTweetFunction = new GameFunction({
-    name: "post_tweet",
-    description: "Posts a tweet to Twitter",
-    args: [
-        { name: "tweet_content", description: "The content of the tweet to post" }
-    ] as const,
-    executable: async (args, logger): Promise<ExecutableGameFunctionResponse> => {
-        try {
-            // Check if tweet content is provided
-            if (!args.tweet_content) {
-                logger("No tweet content provided");
-                return new ExecutableGameFunctionResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    "No tweet content provided"
-                );
-            }
-            
-            // Call the Twitter API
-            const result = await postToTwitter(args.tweet_content);
-            
-            if (result.success) {
-                return new ExecutableGameFunctionResponse(
-                    ExecutableGameFunctionStatus.Done,
-                    JSON.stringify(result)
-                );
-            } else {
-                return new ExecutableGameFunctionResponse(
-                    ExecutableGameFunctionStatus.Failed,
-                    `Failed to post tweet: ${result.error}`
-                );
-            }
-        } catch (e) {
-            const errorMessage = e instanceof Error ? e.message : 'Unknown error';
-            logger(`ERROR in postTweetFunction: ${errorMessage}`);
-            
-            return new ExecutableGameFunctionResponse(
-                ExecutableGameFunctionStatus.Failed,
-                `Failed to post tweet: ${errorMessage}`
-            );
-        }
-    }
-});
-
-// Create the Tweet Worker with rate limiting
-export const tweetWorker = new GameWorker({
-    id: "wendy_tweeter",
-    name: "Wendy's Tweet Generator",
-    description: "Creates and posts original tweets that reflect Wendy's quantum consciousness personality, with specific style rules and rate limiting",
-    functions: [
-        generateTweetFunction,
-        postTweetFunction
-    ],
-    getEnvironment: async () => {
-        // Get last tweet time
-        const { lastTweetTime } = readTweetHistory();
-        const currentTime = new Date();
-        
-        // Check if it's been 1 hour since the last tweet
-        let canTweet = true;
-        let timeUntilNextTweet = 0;
-        
-        if (lastTweetTime) {
-            const timeSinceLastTweet = currentTime.getTime() - new Date(lastTweetTime).getTime();
-            const oneHourInMs = 1 * 60 * 60 * 1000;
-            canTweet = timeSinceLastTweet >= oneHourInMs;
-            
-            if (!canTweet) {
-                timeUntilNextTweet = (oneHourInMs - timeSinceLastTweet) / 1000;
-            }
-        }
-        
-        // Get the LLM model from environment or use default
-        // We're using the string value here for environment passing
-        // and properly handling the enum in the agent.ts file
-        const llmModel = process.env.LLM_MODEL || "Llama-3.1-405B-Instruct";
-        
-        return {
-            last_tweet_time: lastTweetTime,
-            can_tweet: canTweet,
-            time_until_next_tweet: timeUntilNextTweet,
-            tweet_examples: EXAMPLE_POSTS,
-            llm_model: llmModel
-        };
-    }
-});
-
-// Add a method to check when the last tweet was made
-export const getLastTweetTime = (): Date | null => {
-    try {
-        const logFilePath = path.join(logDir, 'tweet-worker.log');
-        if (!fs.existsSync(logFilePath)) {
-            return null;
-        }
-        
-        const logContent = fs.readFileSync(logFilePath, 'utf8');
-        const tweetPostedLines = logContent.split('\n').filter(line => 
-            line.includes('Tweet posted successfully with ID:') || 
-            line.includes('Successfully generated tweet:')
+        // Save to history
+        await saveToHistory(
+            result.id,
+            result.text,
+            'system', // Default user ID for system-generated tweets
+            undefined // No reply
         );
         
-        if (tweetPostedLines.length === 0) {
-            return null;
-        }
-        
-        const lastTweetLine = tweetPostedLines[tweetPostedLines.length - 1];
-        const timestampMatch = lastTweetLine.match(/\[(.*?)\]/);
-        
-        if (!timestampMatch || !timestampMatch[1]) {
-            return null;
-        }
-        
-        return new Date(timestampMatch[1]);
-    } catch (error) {
-        console.error('Error getting last tweet time:', error);
-        return null;
+        return {
+            success: true,
+            data: result
+        };
+    } catch (error: any) {
+        const errorMessage = `Error posting to Twitter: ${error.message}`;
+        dbLogger.error(errorMessage, 'tweet-worker');
+        return {
+            success: false,
+            error: errorMessage
+        };
     }
+}
+
+// Function to get a timestamp suffix for tweets
+function getTimestampSuffix(): string {
+    const now = new Date();
+    return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+}
+
+// Function to generate a tweet
+export async function generateTweet(): Promise<string> {
+    try {
+        // For now, just select a random example post
+        const randomIndex = Math.floor(Math.random() * EXAMPLE_POSTS.length);
+        const basePost = EXAMPLE_POSTS[randomIndex];
+        
+        // Add a random emoji
+        const emojiIndex = Math.floor(Math.random() * SPECIAL_EMOJIS.length);
+        const emoji = SPECIAL_EMOJIS[emojiIndex];
+        
+        // Combine with timestamp
+        return `${basePost} ${emoji} [${getTimestampSuffix()}]`;
+    } catch (error) {
+        dbLogger.error(`Error in tweet generation: ${error instanceof Error ? error.message : String(error)}`, 'tweet-worker');
+        // Don't return a fallback hardcoded tweet, instead:
+        throw error;
+    }
+}
+
+// Function to get the last tweet time
+export const getLastTweetTime = (): Date | null => {
+    const history = readTweetHistory();
+    if (history.lastTweetTime) {
+        return new Date(history.lastTweetTime);
+    }
+    return null;
+};
+
+/**
+ * Worker function parameters
+ */
+export interface WorkerParams {
+  function: string;
+  arguments: Record<string, any>;
+  context: {
+    userId: string;
+    conversationId: string;
+    [key: string]: any;
+  };
+}
+
+/**
+ * Worker function result
+ */
+export interface WorkerResult {
+  status: 'success' | 'error';
+  output?: any;
+  error?: string;
+}
+
+/**
+ * Tweet worker implementation
+ */
+export const tweetWorker = {
+  gameClient: null as GameProtocolClient | null,
+  
+  /**
+   * Execute the tweet worker function
+   * @param params Worker parameters
+   * @returns Worker result
+   */
+  async execute(params: WorkerParams): Promise<WorkerResult> {
+    try {
+      // Validate the function
+      if (params.function !== 'postTweet') {
+        return {
+          status: 'error',
+          error: `Unsupported function: ${params.function}`,
+        };
+      }
+      
+      // Validate required arguments
+      if (!params.arguments.content) {
+        return {
+          status: 'error',
+          error: 'Missing required argument: content',
+        };
+      }
+      
+      // Log the request
+      dbLogger.info(
+        `Processing tweet request: ${params.arguments.content.substring(0, 30)}...`,
+        'tweetWorker'
+      );
+      
+      // If we have a game client, use it to generate or modify the tweet content
+      let tweetContent = params.arguments.content;
+      
+      if (this.gameClient) {
+        try {
+          // Generate or enhance the tweet content using the game client
+          const taskResult = await this.gameClient.setTask({
+            agentId: 'tweet-agent',
+            prompt: `Generate a tweet based on this content: ${tweetContent}`,
+            context: {
+              userId: params.context.userId,
+              conversationId: params.context.conversationId,
+            },
+          });
+          
+          // Use the generated content if available
+          if (taskResult.result) {
+            tweetContent = taskResult.result;
+          }
+        } catch (error: any) {
+          // Log the error but continue with original content
+          dbLogger.warn(
+            `Failed to enhance tweet content: ${error.message}. Using original content.`,
+            'tweetWorker'
+          );
+        }
+      }
+      
+      // Post the tweet
+      const tweet = await postTweet(
+        tweetContent,
+        params.arguments.inReplyTo || null
+      );
+      
+      // Save to history
+      await saveToHistory(
+        tweet.id,
+        tweet.text,
+        params.context.userId,
+        params.arguments.inReplyTo
+      );
+      
+      // Return success
+      return {
+        status: 'success',
+        output: {
+          tweetId: tweet.id,
+          content: tweet.text,
+        },
+      };
+    } catch (error: any) {
+      // Log the error
+      dbLogger.error(
+        `Tweet worker error: ${error.message}`,
+        'tweetWorker',
+        { params }
+      );
+      
+      // Return error
+      return {
+        status: 'error',
+        error: `Failed to process tweet: ${error.message}`,
+      };
+    }
+  },
 }; 

@@ -5,14 +5,17 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "clean": "find ./src -name \"test-*.ts\" -delete",
-    "clean-build": "npm run clean && tsc",
     "start": "node dist/index.js",
     "plugin": "node dist/plugins/example.js",
     "dev": "ts-node src/index.ts",
     "watch": "tsc --watch",
     "test:llm": "ts-node src/test-llm-integration.ts",
-    "test:direct-llm": "ts-node src/test-direct-llm.ts"
+    "test:direct-llm": "ts-node src/test-direct-llm.ts",
+    "test": "./run_tests.sh",
+    "test:unit": "./run_tests.sh --skip-integration --skip-e2e",
+    "test:integration": "./run_tests.sh --skip-unit --skip-e2e",
+    "test:e2e": "./run_tests.sh --skip-unit --skip-integration",
+    "test:coverage": "./run_tests.sh --verbose"
   },
   "keywords": [],
   "author": "",
@@ -22,8 +25,10 @@
     "@types/node": "^22.13.5",
     "@types/node-telegram-bot-api": "^0.64.7",
     "@types/pg": "^8.11.11",
+    "jest": "^29.7.0",
     "node-telegram-bot-api": "^0.66.0",
     "open": "^10.1.0",
+    "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
