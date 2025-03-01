@@ -54,19 +54,26 @@ else
     echo -e "${GREEN}Project already linked.${NC}"
 fi
 
-# Install PostgreSQL client dependencies
+# Create a fresh package-lock.json file
+echo -e "${YELLOW}Removing existing package-lock.json if it exists...${NC}"
+if [ -f "package-lock.json" ]; then
+    rm package-lock.json
+    echo -e "${GREEN}Existing package-lock.json removed.${NC}"
+fi
+
+# Install PostgreSQL client dependencies 
 echo -e "${YELLOW}Installing PostgreSQL client dependencies...${NC}"
-npm install pg @types/pg --save
+npm install pg @types/pg express @types/express --save
 
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to install PostgreSQL dependencies.${NC}"
+    echo -e "${RED}Failed to install PostgreSQL and Express dependencies.${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}PostgreSQL dependencies installed successfully.${NC}"
+echo -e "${GREEN}Dependencies installed successfully.${NC}"
 
 # Ensure all dependencies are properly installed
-echo -e "${YELLOW}Installing all dependencies...${NC}"
+echo -e "${YELLOW}Installing all dependencies and generating fresh package-lock.json...${NC}"
 npm install
 
 if [ $? -ne 0 ]; then
