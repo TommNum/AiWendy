@@ -2,6 +2,8 @@ import { activity_agent, waitForAgentReady } from './agent';
 import { virtualsApiRateLimiter, twitterMentionsRateLimiter, twitterTweetsRateLimiter } from './utils/rateLimiter';
 import { ExecutableGameFunctionResponse, ExecutableGameFunctionStatus } from "@virtuals-protocol/game";
 import { postToTwitter } from './workers/tweetWorker';  // Import the postToTwitter function
+import { initDbLogger, dbLogger } from './utils/dbLogger';  // Import the database logger
+import './healthcheck';  // Import the health check server
 
 /**
  * Task Scheduler - Manages the timing of different agent operations
@@ -130,8 +132,12 @@ export async function postStartupTweet() {
 
 async function main() {
     try {
+        console.log("🔄 Initializing database logger...");
+        await initDbLogger();
+        
         // Initialize the agent
         console.log("🔄 Initializing Wendy agent...");
+        dbLogger.info("Starting Wendy agent initialization", "main");
         await waitForAgentReady();
         
         // Create and configure the task scheduler
@@ -164,16 +170,19 @@ async function main() {
         
         // Main execution loop
         console.log("🚀 Starting main execution loop...");
+        dbLogger.info("Starting main execution loop", "main");
         let running = true;
         
         // Set up graceful shutdown
         process.on('SIGINT', () => {
             console.log("Received SIGINT, shutting down gracefully...");
+            dbLogger.info("Received SIGINT, shutting down gracefully", "main");
             running = false;
         });
         
         process.on('SIGTERM', () => {
             console.log("Received SIGTERM, shutting down gracefully...");
+            dbLogger.info("Received SIGTERM, shutting down gracefully", "main");
             running = false;
         });
         
@@ -188,6 +197,7 @@ async function main() {
                     scheduler.markTaskExecuted(taskId);
                     
                     console.log(`Executing task: ${taskId} at ${new Date().toISOString()}`);
+                    dbLogger.info(`Executing task: ${taskId}`, "scheduler");
                     
                     // Apply rate limiting before executing the task
                     await virtualsApiRateLimiter.getToken();
@@ -202,6 +212,7 @@ async function main() {
                     delete process.env.CURRENT_OPERATION;
                     
                     console.log(`Completed task: ${taskId}`);
+                    dbLogger.info(`Completed task: ${taskId}`, "scheduler");
                 } else {
                     // No task ready to run, calculate wait time
                     const waitTime = scheduler.getTimeUntilNextTask();
@@ -216,14 +227,17 @@ async function main() {
                 }
             } catch (error) {
                 console.error(`Error in main loop: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                dbLogger.error(`Error in main loop: ${error instanceof Error ? error.message : 'Unknown error'}`, "main");
                 // Wait a bit before retrying to avoid tight error loops
                 await new Promise(resolve => setTimeout(resolve, 30000));
             }
         }
         
         console.log("Agent execution terminated gracefully");
+        dbLogger.info("Agent execution terminated gracefully", "main");
     } catch (error) {
         console.error("Critical error running Wendy agent:", error);
+        dbLogger.error(`Critical error running Wendy agent: ${error}`, "main");
     }
 }
 

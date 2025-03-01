@@ -11,6 +11,7 @@ RUN apt-get update && \
     curl \
     node-gyp \
     ffmpeg \
+    postgresql-client \
     build-essential && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -26,22 +27,20 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm install --no-frozen-lockfile
+RUN npm install pg @types/pg --save
 
 # Create a clean src directory with just what we need
 RUN mkdir -p src/utils src/workers
 
 # Copy only necessary files, avoiding plugins completely
-COPY src/agent.ts src/functions.ts src/index.ts ./src/
-COPY src/utils/rateLimiter.ts ./src/utils/
-COPY src/workers/agentStateWorker.ts ./src/workers/
-COPY src/workers/tweetWorker.ts ./src/workers/
-COPY src/workers/twitterReplyWorker.ts ./src/workers/
-COPY src/workers/twitterSearchWorker.ts ./src/workers/
+COPY src/*.ts ./src/
+COPY src/utils/*.ts ./src/utils/
+COPY src/workers/*.ts ./src/workers/
 COPY tsconfig.json ./
 COPY .env* ./
 
-# Create data directory
-RUN mkdir -p ./data
+# Create data directory and logs directory
+RUN mkdir -p ./data ./logs
 
 # Build the project
 RUN npm run build
@@ -57,15 +56,16 @@ RUN apt-get update && \
     apt-get install -y \
     git \
     python3 \
-    ffmpeg && \
+    ffmpeg \
+    postgresql-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the working directory
 WORKDIR /app
 
-# Create data directory
-RUN mkdir -p ./data
+# Create data and logs directories
+RUN mkdir -p ./data ./logs
 
 # Copy built artifacts and production dependencies from the builder stage
 COPY --from=builder /app/package.json ./
@@ -73,6 +73,7 @@ COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/data/ ./data/
+COPY --from=builder /app/logs/ ./logs/
 COPY --from=builder /app/.env* ./
 
 # Expose necessary ports

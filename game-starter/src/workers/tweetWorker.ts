@@ -16,7 +16,7 @@ import {
     LLMModel,
     GameAgent
 } from "@virtuals-protocol/game";
-import { twitterTweetsRateLimiter, twitterOriginalTweetsRateLimiter } from '../utils/rateLimiter';
+import { twitterTweetsRateLimiter, twitterOriginalTweetsRateLimiter, twitterRepliesRateLimiter } from '../utils/rateLimiter';
 // Import the twitter-api-v2 library directly
 import {
     TweetSearchRecentV2Paginator,
@@ -283,7 +283,7 @@ export async function postToTwitter(tweetText: string, inReplyToId?: string): Pr
                 }
                 
                 // Choose the appropriate rate limiter based on whether this is a reply or an original tweet
-                const rateLimiter = inReplyToId ? twitterTweetsRateLimiter : twitterOriginalTweetsRateLimiter;
+                const rateLimiter = inReplyToId ? twitterRepliesRateLimiter : twitterOriginalTweetsRateLimiter;
                 
                 // Check if we can tweet (rate limiting)
                 if (!rateLimiter.canTweet()) {

@@ -154,11 +154,31 @@ The application uses OAuth 1.0a to authenticate with the Twitter API v2. The imp
 
 ### Rate Limiting
 
-The application implements rate limiting for Twitter API requests to comply with Twitter's guidelines:
+The application implements rate limiting for various API calls to ensure compliance with Twitter's API limits and to maintain a natural posting cadence:
 
-1. **Token-Based Rate Limiting**: Using a token bucket algorithm that allows bursts of requests while maintaining a long-term average rate
-2. **Per-Function Limits**: Different functions (posting tweets, checking mentions, searching) have separate rate limits
-3. **Scheduled Operations**: Tweets, mentions, and searches are scheduled at appropriate intervals to avoid hitting rate limits
+| Service | Limit | Interval | Description |
+|---------|-------|----------|-------------|
+| Twitter API | 300 requests | 15 minutes | General Twitter API calls |
+| Twitter Mentions | 10 requests | 15 minutes | Checking for mentions |
+| Twitter Replies | 50 replies | 60 minutes | Replying to tweets |
+| Twitter Likes | 200 likes | 24 hours | Liking tweets |
+| Twitter Tweets | 100 tweets | 24 hours | Total tweets (including replies) |
+| Twitter Original Tweets | 1 tweet | 120 minutes | Original (non-reply) tweets |
+
+Rate limiting is implemented using a token bucket algorithm, with state persistence to maintain limits across application restarts.
+
+## Twitter Mentions and Replies
+
+The application checks for Twitter mentions every 5 minutes using the `check_mentions` task. When a new mention is detected:
+
+1. The mention is recorded in `data/mentions.json` to prevent duplicate processing
+2. The application generates a reply using the LLM model
+3. The reply is posted to Twitter using the Twitter API
+4. The reply is recorded to prevent duplicate replies to the same tweet
+
+The system uses different rate limiters for original tweets (1 per 2 hours) and replies (50 per hour) to ensure a natural interaction pattern while maintaining compliance with Twitter's API limits.
+
+If you mention @AiWendy on Twitter, the system should detect your mention within 5 minutes and generate a reply, subject to the rate limiting constraints.
 
 ## LLM Integration
 

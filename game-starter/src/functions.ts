@@ -1,11 +1,23 @@
 import { config } from 'dotenv';
 import { resolve } from 'path';
-import { twitterMentionsRateLimiter, twitterApiRateLimiter, twitterRepliesRateLimiter, twitterLikesRateLimiter } from './utils/rateLimiter';
 import fs from 'fs';
 import path from 'path';
 
 // Load environment variables
 config({ path: resolve(__dirname, '../.env') });
+
+// Verify critical environment variables before proceeding with imports
+if (!process.env.API_KEY) {
+    throw new Error('API_KEY is required in environment variables');
+}
+
+if (!process.env.TWITTER_BEARER_TOKEN) {
+    throw new Error('TWITTER_BEARER_TOKEN is required in environment variables');
+}
+
+if (!process.env.TWITTER_USER_ID) {
+    console.warn('TWITTER_USER_ID is not set. Twitter mention functionality will not work correctly.');
+}
 
 import {
     GameFunction,
@@ -13,10 +25,14 @@ import {
     ExecutableGameFunctionStatus,
     LLMModel
 } from "@virtuals-protocol/game";
+import { twitterMentionsRateLimiter, twitterApiRateLimiter, twitterRepliesRateLimiter, twitterLikesRateLimiter } from './utils/rateLimiter';
 
 // ---------------------------
 // Constants
 // ---------------------------
+
+// Twitter API base URL
+const TWITTER_API_BASE_URL = process.env.TWITTER_API_BASE_URL || 'https://api.twitter.com/2';
 
 // Quantum/spiritual emojis for Wendy's tweets
 const QUANTUM_EMOJIS = ["✨", "🔮", "🌌", "⚛️", "🧠", "🧿", "🌀", "💫", "✴️", "🔆"];
@@ -132,13 +148,8 @@ Reply:`;
 };
 
 // Generate short reply (under 11 words) for engaging with searched tweets
-async function generateShortReply(tweetText: string, model: LLMModel = LLMModel.DeepSeek_R1): Promise<string> {
+async function generateShortReply(tweetText: string, model: LLMModel = LLMModel.Llama_3_1_405B_Instruct): Promise<string> {
     try {
-        // Check if we have an API key
-        if (!process.env.API_KEY) {
-            throw new Error("API_KEY is required");
-        }
-        
         // Get a random number of emojis to use (0-2)
         const emojiCount = Math.floor(Math.random() * 3);
         
@@ -279,7 +290,7 @@ export const getMentionsFunction = new GameFunction({
             }
             
             // Fetch mentions from Twitter API v2
-            const url = `https://api.twitter.com/2/users/${process.env.TWITTER_USER_ID}/mentions?expansions=author_id&tweet.fields=created_at,text`;
+            const url = `${TWITTER_API_BASE_URL}/users/${process.env.TWITTER_USER_ID}/mentions?expansions=author_id&tweet.fields=created_at,text`;
             
             logger(`Fetching mentions from Twitter API: ${url}`);
             
@@ -420,7 +431,7 @@ export const replyToTweetFunction = new GameFunction({
 
             // Generate a reply in Wendy's style
             logger(`Generating reply to tweet: ${tweet_text}`);
-            const replyText = await generateReply(tweet_text || "", LLMModel.DeepSeek_R1);
+            const replyText = await generateReply(tweet_text || "", LLMModel.Llama_3_1_405B_Instruct);
             
             // Post the reply
             logger(`Posting reply: "${replyText}" to tweet ${tweet_id}`);
@@ -429,7 +440,7 @@ export const replyToTweetFunction = new GameFunction({
             await twitterApiRateLimiter.getToken();
             
             // Post the reply to Twitter
-            const response = await fetch('https://api.twitter.com/2/tweets', {
+            const response = await fetch(`${TWITTER_API_BASE_URL}/tweets`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,
@@ -519,7 +530,7 @@ export const searchTweetsFunction = new GameFunction({
             
             // Prepare search query (recent tweets with high engagement)
             const query = encodeURIComponent(`${randomTopic} -is:retweet -is:reply`);
-            const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&tweet.fields=public_metrics,created_at,text&max_results=25`;
+            const url = `${TWITTER_API_BASE_URL}/tweets/search/recent?query=${query}&tweet.fields=public_metrics,created_at,text&max_results=25`;
             
             const response = await fetch(url, {
                 headers: {
@@ -604,7 +615,7 @@ export const likeTweetFunction = new GameFunction({
             
             // Like the tweet (create "like" action)
             const userId = process.env.TWITTER_USER_ID;
-            const url = `https://api.twitter.com/2/users/${userId}/likes`;
+            const url = `${TWITTER_API_BASE_URL}/users/${userId}/likes`;
             
             const response = await fetch(url, {
                 method: 'POST',
@@ -670,7 +681,7 @@ export const shortReplyToTweetFunction = new GameFunction({
 
             // Generate a short reply in Wendy's style (under 11 words)
             logger(`Generating short reply to tweet: ${tweet_text}`);
-            const replyText = await generateShortReply(tweet_text || "", LLMModel.DeepSeek_R1);
+            const replyText = await generateShortReply(tweet_text || "", LLMModel.Llama_3_1_405B_Instruct);
             
             // Post the reply
             logger(`Posting short reply: "${replyText}" to tweet ${tweet_id}`);
@@ -679,7 +690,7 @@ export const shortReplyToTweetFunction = new GameFunction({
             await twitterApiRateLimiter.getToken();
             
             // Post the reply to Twitter
-            const response = await fetch('https://api.twitter.com/2/tweets', {
+            const response = await fetch(`${TWITTER_API_BASE_URL}/tweets`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${process.env.TWITTER_BEARER_TOKEN || ''}`,

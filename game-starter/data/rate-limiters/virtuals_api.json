@@ -1,0 +1,11 @@
+{
+  "maxTokens": 30,
+  "tokensPerInterval": 30,
+  "intervalMs": 300000,
+  "currentTokens": 29,
+  "lastRefillTime": 1740788420924,
+  "requestsThisInterval": 1,
+  "intervalStartTime": 1740788420924,
+  "lastTweetTime": 0,
+  "lastUpdate": 1740788420927
+}
