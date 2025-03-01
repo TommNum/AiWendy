@@ -1,9 +1,9 @@
 import { GameAgent } from "@virtuals-protocol/game";
-import TwitterPlugin, {
-  GameTwitterClient,
-  TwitterClient,
-} from "@virtuals-protocol/game-twitter-plugin";
+import { TwitterPlugin } from "../src/twitterPlugin";
+import { TwitterClient } from "../src/twitterClient";
+import { GameTwitterClient } from "../src/gameTwitterClient";
 
+// Configure for your environment
 const gameTwitterClient = new GameTwitterClient({
   accessToken: "xxxxxxxxxx",
 });

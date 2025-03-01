@@ -2,7 +2,7 @@ import {
   GameWorker,
   GameFunction,
   ExecutableGameFunctionResponse,
-  ExecutableGameFunctionStatus,
+  ExecutableGameFunctionStatus
 } from "@virtuals-protocol/game";
 import { ITweetClient } from "./interface";
 
@@ -13,7 +13,15 @@ interface ITwitterPluginOptions {
   twitterClient: ITweetClient;
 }
 
-class TwitterPlugin {
+// Define our own ExecutableArgs type since it's not exported from the game library
+type ExecutableArgs<T extends Array<{ name: string; description: string }>> = {
+  [K in T[number]['name']]: string;
+};
+
+// Define logger type for clearer type annotations
+type LoggerFunction = (message: string) => void;
+
+export class TwitterPlugin {
   private id: string;
   private name: string;
   private description: string;
@@ -63,7 +71,10 @@ class TwitterPlugin {
       name: "search_tweets",
       description: "Search tweets",
       args: [{ name: "query", description: "The search query" }] as const,
-      executable: async (args, logger) => {
+      executable: async (
+        args: Partial<ExecutableArgs<[{ name: "query"; description: "The search query" }]>>, 
+        logger: LoggerFunction
+      ) => {
         try {
           if (!args.query) {
             return new ExecutableGameFunctionResponse(
@@ -116,7 +127,14 @@ class TwitterPlugin {
           description: "The reasoning behind the reply",
         },
       ] as const,
-      executable: async (args, logger) => {
+      executable: async (
+        args: Partial<ExecutableArgs<[
+          { name: "tweet_id"; description: "The tweet id" },
+          { name: "reply"; description: "The reply content" },
+          { name: "reply_reasoning"; description: "The reasoning behind the reply" }
+        ]>>,
+        logger: LoggerFunction
+      ) => {
         try {
           if (!args.tweet_id || !args.reply) {
             return new ExecutableGameFunctionResponse(
@@ -154,7 +172,13 @@ class TwitterPlugin {
           description: "The reasoning behind the tweet",
         },
       ] as const,
-      executable: async (args, logger) => {
+      executable: async (
+        args: Partial<ExecutableArgs<[
+          { name: "tweet"; description: "The tweet content" },
+          { name: "tweet_reasoning"; description: "The reasoning behind the tweet" }
+        ]>>,
+        logger: LoggerFunction
+      ) => {
         try {
           if (!args.tweet) {
             return new ExecutableGameFunctionResponse(
@@ -187,7 +211,12 @@ class TwitterPlugin {
       description:
         "Like a tweet. Choose this when you want to support a tweet quickly, without needing to comment.",
       args: [{ name: "tweet_id", description: "The tweet id" }] as const,
-      executable: async (args, logger) => {
+      executable: async (
+        args: Partial<ExecutableArgs<[
+          { name: "tweet_id"; description: "The tweet id" }
+        ]>>,
+        logger: LoggerFunction
+      ) => {
         try {
           if (!args.tweet_id) {
             return new ExecutableGameFunctionResponse(
@@ -218,12 +247,18 @@ class TwitterPlugin {
     return new GameFunction({
       name: "quote_tweet",
       description:
-        "Share someone else’s tweet while adding your own commentary. Use this when you want to provide your opinion, analysis, or humor on an existing tweet while still promoting the original content. This will help with your social presence.",
+        "Share someone else's tweet while adding your own commentary. Use this when you want to provide your opinion, analysis, or humor on an existing tweet while still promoting the original content. This will help with your social presence.",
       args: [
         { name: "tweet_id", description: "The tweet id" },
         { name: "quote", description: "The quote content" },
       ] as const,
-      executable: async (args, logger) => {
+      executable: async (
+        args: Partial<ExecutableArgs<[
+          { name: "tweet_id"; description: "The tweet id" },
+          { name: "quote"; description: "The quote content" }
+        ]>>,
+        logger: LoggerFunction
+      ) => {
         try {
           if (!args.tweet_id || !args.quote) {
             return new ExecutableGameFunctionResponse(
@@ -250,5 +285,3 @@ class TwitterPlugin {
     });
   }
 }
-
-export default TwitterPlugin;
