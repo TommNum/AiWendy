@@ -25,16 +25,17 @@ WORKDIR /app
 # Copy package files first (for better layer caching)
 COPY package*.json ./
 
-# Install dependencies - use a more reliable approach that ensures all deps are installed
-RUN npm install && npm install pg @types/pg express @types/express --save && npm install
+# Generate a fresh package-lock.json with all dependencies explicitly included
+RUN rm -f package-lock.json && \
+    npm install && \
+    npm install pg @types/pg express @types/express --save && \
+    npm install
 
-# Create a clean src directory with just what we need
-RUN mkdir -p src/utils src/workers
+# Copy the entire source directory
+RUN mkdir -p src
 
-# Copy only necessary files, avoiding plugins completely
-COPY src/*.ts ./src/
-COPY src/utils/*.ts ./src/utils/
-COPY src/workers/*.ts ./src/workers/
+# Copy all source files including tests
+COPY src/ ./src/
 COPY tsconfig.json ./
 COPY .env* ./
 
