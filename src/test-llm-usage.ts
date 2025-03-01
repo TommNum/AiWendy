@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { GameAgent } from '@virtuals-protocol/game';
+import { GameAgent, LLMModel } from '@virtuals-protocol/game';
 import { logger } from './utils/logger';
 
 // Load environment variables
@@ -10,76 +10,75 @@ dotenv.config();
  * instead of hardcoded examples
  */
 async function testLLMUsage() {
+  logger.info('Starting LLM usage test...');
+  
+  // Check if API key is set
+  const apiKey = process.env.API_KEY || process.env.GAME_API_KEY;
+  if (!apiKey) {
+    logger.error('API_KEY environment variable is not set');
+    return false;
+  }
+  
   try {
-    logger.info('Starting LLM usage test...');
-    
-    // Check if API key is available
-    const apiKey = process.env.GAME_API_KEY;
-    if (!apiKey) {
-      logger.error('GAME_API_KEY is not set in environment variables');
-      return;
-    }
-    
-    logger.info('API key found, initializing test agent...');
-    
-    // Create a minimal test agent
-    const testAgent = new GameAgent(apiKey, {
-      name: 'LLM Test Agent',
-      goal: 'Test LLM connectivity and response',
-      description: 'A test agent to verify LLM usage',
-      getAgentState: async () => ({
-        currentTask: 'Testing LLM connectivity',
-        status: 'Active'
-      }),
-      workers: []
+    // Create LLM client directly
+    const llmClient = new LLMModel({
+      apiKey,
+      model: process.env.LLM_MODEL || 'DeepSeek-R1',
     });
     
-    // Initialize the agent to test LLM connectivity
-    logger.info('Initializing agent to test LLM connectivity...');
-    await testAgent.init();
+    logger.info(`Testing LLM connectivity with model: ${llmClient.model}`);
     
-    // Test a simple prompt to verify LLM response
-    logger.info('Sending test prompt to LLM...');
-    const testPrompt = 'Generate a short tweet about artificial intelligence. Keep it under 280 characters.';
+    // Send a test prompt to the LLM
+    const prompt = 'Write a short poem about artificial intelligence in exactly 4 lines.';
+    logger.info(`Sending test prompt to LLM: "${prompt}"`);
     
-    // Use the agent's internal LLM client to send a test prompt
-    // Note: This is using internal methods and may need adjustment based on the actual GameAgent implementation
-    const response = await testAgent.llm.complete({
-      messages: [{ role: 'user', content: testPrompt }],
+    const response = await llmClient.complete({
+      prompt,
+      max_tokens: 100,
       temperature: 0.7,
-      max_tokens: 150
     });
     
-    logger.info('LLM Response received:');
-    logger.info(response);
-    
-    // Verify the model being used
-    logger.info('Checking model information...');
-    // This may need adjustment based on how model information is exposed in the SDK
-    const modelInfo = testAgent.llm.getModelInfo ? await testAgent.llm.getModelInfo() : 'Model info not available';
-    logger.info(`Model information: ${JSON.stringify(modelInfo)}`);
-    
-    logger.info('LLM usage test completed successfully');
-    return true;
-  } catch (error) {
-    logger.error(`LLM usage test failed: ${error.message}`);
-    logger.error(error.stack);
+    if (response && response.text) {
+      logger.info('LLM response received successfully');
+      logger.info(`Response: ${response.text.trim()}`);
+      
+      // Get model info if available
+      try {
+        const modelInfo = await llmClient.getModelInfo();
+        logger.info(`Model info: ${JSON.stringify(modelInfo)}`);
+      } catch (infoError) {
+        logger.warn('Could not retrieve model info');
+      }
+      
+      logger.info('✅ LLM usage test passed');
+      return true;
+    } else {
+      logger.error('LLM response was empty or invalid');
+      return false;
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`LLM usage test failed: ${errorMessage}`);
+    if (error instanceof Error && error.stack) {
+      logger.error(error.stack);
+    }
     return false;
   }
 }
 
 // Run the test
 testLLMUsage()
-  .then(success => {
-    if (success) {
-      logger.info('✅ LLM usage test passed');
+  .then(passed => {
+    if (passed) {
+      logger.info('✅ LLM usage test completed successfully');
       process.exit(0);
     } else {
       logger.error('❌ LLM usage test failed');
       process.exit(1);
     }
   })
-  .catch(error => {
-    logger.error(`Unexpected error in test: ${error.message}`);
+  .catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Unexpected error in LLM test: ${errorMessage}`);
     process.exit(1);
   }); 

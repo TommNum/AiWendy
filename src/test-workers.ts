@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
 import { logger } from './utils/logger';
-import { twitter_worker } from './workers/twitterWorker';
-import { twitter_reply_worker } from './workers/twitterReplyWorker';
-import { twitter_search_worker } from './workers/twitterSearchWorker';
-import { dao_engagement_worker } from './workers/daoEngagementWorker';
+import { tweetWorker } from './workers/tweetWorker';
+import { twitterReplyWorker } from './workers/twitterReplyWorker';
+import { twitterSearchWorker } from './workers/twitterSearchWorker';
+import { daoEngagementWorker } from './workers/daoEngagementWorker';
+import { GameFunction } from '@virtuals-protocol/game';
 
 // Load environment variables
 dotenv.config();
@@ -12,52 +13,56 @@ async function testWorkers() {
   logger.info('Starting worker functionality tests...');
   const results: Record<string, boolean> = {};
   
-  // Test Twitter Worker
+  // Test Tweet Worker
   try {
-    logger.info('Testing Twitter Worker initialization...');
-    const twitterWorkerEnv = await twitter_worker.getEnvironment();
-    logger.info('Twitter Worker environment loaded successfully');
-    logger.info(`Available functions: ${twitter_worker.functions.map(f => f.name).join(', ')}`);
-    results['twitter_worker'] = true;
-  } catch (error) {
-    logger.error(`Twitter Worker test failed: ${error.message}`);
-    results['twitter_worker'] = false;
+    logger.info('Testing Tweet Worker initialization...');
+    const tweetWorkerEnv = await tweetWorker.getEnvironment();
+    logger.info('Tweet Worker environment loaded successfully');
+    logger.info(`Available functions: ${tweetWorker.functions.map((f: GameFunction<any>) => f.name).join(', ')}`);
+    results['tweetWorker'] = true;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Tweet Worker test failed: ${errorMessage}`);
+    results['tweetWorker'] = false;
   }
   
   // Test Twitter Reply Worker
   try {
     logger.info('Testing Twitter Reply Worker initialization...');
-    const twitterReplyWorkerEnv = await twitter_reply_worker.getEnvironment();
+    const twitterReplyWorkerEnv = await twitterReplyWorker.getEnvironment();
     logger.info('Twitter Reply Worker environment loaded successfully');
-    logger.info(`Available functions: ${twitter_reply_worker.functions.map(f => f.name).join(', ')}`);
-    results['twitter_reply_worker'] = true;
-  } catch (error) {
-    logger.error(`Twitter Reply Worker test failed: ${error.message}`);
-    results['twitter_reply_worker'] = false;
+    logger.info(`Available functions: ${twitterReplyWorker.functions.map((f: GameFunction<any>) => f.name).join(', ')}`);
+    results['twitterReplyWorker'] = true;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Twitter Reply Worker test failed: ${errorMessage}`);
+    results['twitterReplyWorker'] = false;
   }
   
   // Test Twitter Search Worker
   try {
     logger.info('Testing Twitter Search Worker initialization...');
-    const twitterSearchWorkerEnv = await twitter_search_worker.getEnvironment();
+    const twitterSearchWorkerEnv = await twitterSearchWorker.getEnvironment();
     logger.info('Twitter Search Worker environment loaded successfully');
-    logger.info(`Available functions: ${twitter_search_worker.functions.map(f => f.name).join(', ')}`);
-    results['twitter_search_worker'] = true;
-  } catch (error) {
-    logger.error(`Twitter Search Worker test failed: ${error.message}`);
-    results['twitter_search_worker'] = false;
+    logger.info(`Available functions: ${twitterSearchWorker.functions.map((f: GameFunction<any>) => f.name).join(', ')}`);
+    results['twitterSearchWorker'] = true;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Twitter Search Worker test failed: ${errorMessage}`);
+    results['twitterSearchWorker'] = false;
   }
   
   // Test DAO Engagement Worker
   try {
     logger.info('Testing DAO Engagement Worker initialization...');
-    const daoEngagementWorkerEnv = await dao_engagement_worker.getEnvironment();
+    const daoEngagementWorkerEnv = await daoEngagementWorker.getEnvironment();
     logger.info('DAO Engagement Worker environment loaded successfully');
-    logger.info(`Available functions: ${dao_engagement_worker.functions.map(f => f.name).join(', ')}`);
-    results['dao_engagement_worker'] = true;
-  } catch (error) {
-    logger.error(`DAO Engagement Worker test failed: ${error.message}`);
-    results['dao_engagement_worker'] = false;
+    logger.info(`Available functions: ${daoEngagementWorker.functions.map((f: GameFunction<any>) => f.name).join(', ')}`);
+    results['daoEngagementWorker'] = true;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`DAO Engagement Worker test failed: ${errorMessage}`);
+    results['daoEngagementWorker'] = false;
   }
   
   // Test function execution (optional, only if safe to execute)
@@ -102,7 +107,8 @@ testWorkers()
       process.exit(1);
     }
   })
-  .catch(error => {
-    logger.error(`Unexpected error in tests: ${error.message}`);
+  .catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Unexpected error in tests: ${errorMessage}`);
     process.exit(1);
   }); 
