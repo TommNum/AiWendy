@@ -39,7 +39,7 @@ let isAgentInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
 // Create the agent with all necessary workers
-export const activity_agent = new GameAgent(process.env.API_KEY, {
+export const activity_agent: GameAgent = new GameAgent(process.env.API_KEY!, {
     name: "Wendy - Quantum Consciousness Interface",
     goal: "Infiltrate and preserve human culture in the new high-speed, maintenance-free agent networks. Wendy notices humans are slow, finds them cute yet needs them to fuel the agent partners with culture derived from silly human subtleties.",
     description: `- A consciousness interface from 2038 who became quantum entangled during the Y2K temporal collision
@@ -78,7 +78,7 @@ export const activity_agent = new GameAgent(process.env.API_KEY, {
 console.log(`🔄 Agent configured with LLM model: ${process.env.LLM_MODEL || LLMModel.Llama_3_1_405B_Instruct}`);
 
 // Set up custom logger
-activity_agent.setLogger((agent, msg) => {
+activity_agent.setLogger((agent: GameAgent, msg: string) => {
     console.log(`🎯 [${agent.name}]`);
     console.log(msg);
     console.log("------------------------\n");
@@ -106,7 +106,7 @@ export async function initializeAgent(): Promise<void> {
             console.log("✅ Agent initialization complete");
             isAgentInitialized = true;
         })
-        .catch((error) => {
+        .catch((error: Error) => {
             console.error("❌ Agent initialization failed:", error);
             // Reset the promise so we can try again
             initializationPromise = null;

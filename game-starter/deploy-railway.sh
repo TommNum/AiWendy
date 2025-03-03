@@ -54,34 +54,18 @@ else
     echo -e "${GREEN}Project already linked.${NC}"
 fi
 
-# Create a fresh package-lock.json file
-echo -e "${YELLOW}Removing existing package-lock.json if it exists...${NC}"
-if [ -f "package-lock.json" ]; then
-    rm package-lock.json
-    echo -e "${GREEN}Existing package-lock.json removed.${NC}"
-fi
+# Make sure the prepare-dependencies script is executable
+echo -e "${YELLOW}Ensuring prepare-dependencies.sh is executable...${NC}"
+chmod +x ./prepare-dependencies.sh
 
-# Install PostgreSQL client dependencies 
-echo -e "${YELLOW}Installing PostgreSQL client dependencies...${NC}"
-npm install pg @types/pg express @types/express --save
+# Run the prepare-dependencies script
+echo -e "${YELLOW}Preparing dependencies for deployment...${NC}"
+./prepare-dependencies.sh
 
 if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to install PostgreSQL and Express dependencies.${NC}"
+    echo -e "${RED}Failed to prepare dependencies. Aborting deployment.${NC}"
     exit 1
 fi
-
-echo -e "${GREEN}Dependencies installed successfully.${NC}"
-
-# Ensure all dependencies are properly installed
-echo -e "${YELLOW}Installing all dependencies and generating fresh package-lock.json...${NC}"
-npm install
-
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to install dependencies.${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}All dependencies installed successfully.${NC}"
 
 # Build the application
 echo -e "${YELLOW}Building the application...${NC}"

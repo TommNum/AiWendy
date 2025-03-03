@@ -195,6 +195,25 @@ export class RateLimiter {
         }
         return this.calculateWaitTime();
     }
+    
+    /**
+     * Schedule a function to be executed with rate limiting
+     * @param fn Function to execute after obtaining a rate limit token
+     * @returns Result of the function
+     */
+    async schedule<T>(fn: () => Promise<T>): Promise<T> {
+        // Get a token before executing the function
+        await this.getToken();
+        
+        // Execute the function
+        try {
+            return await fn();
+        } catch (error) {
+            // If function fails, we still consumed the token
+            console.error(`[${this.name}] Scheduled function failed:`, error);
+            throw error;
+        }
+    }
 }
 
 // Singleton instances for different APIs

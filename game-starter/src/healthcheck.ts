@@ -59,6 +59,7 @@ try {
 // Create Express app for the main API
 const app = express();
 const port = process.env.HEALTH_PORT || 8084;
+let server: http.Server;
 
 // Add middleware to track response time and add correlation ID
 app.use((req, res, next) => {
@@ -359,7 +360,7 @@ app.get('/logs', async (req, res) => {
 
 // Start the server
 try {
-  app.listen(port, () => {
+  server = app.listen(port, () => {
     console.log(`🚀 Health check server running on port ${port}`);
     logInfo(`Health check server started on port ${port}`, 'system');
   });
@@ -424,35 +425,8 @@ function getMetricsStats(): MetricsStats {
   return stats;
 }
 
-// Create a simple HTTP server for health checks
-const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
-  if (req.url === '/health') {
-    // Return 200 OK for health checks
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    
-    const response = {
-      status: 'ok',
-      timestamp: new Date().toISOString()
-    };
-    
-    res.end(JSON.stringify(response));
-    
-    // Log health check access (approximately 10% of the time)
-    if (Math.random() < 0.1) {
-      logInfo('Health check accessed');
-    }
-  } else {
-    // Return 404 for any other path
-    res.statusCode = 404;
-    res.end();
-  }
-});
+// Note: The duplicate simple HTTP server has been removed to avoid port conflicts
+// The Express server above serves the same purpose and provides more functionality
 
-// Start the health check server
-const HEALTH_PORT = process.env.HEALTH_PORT || 8084;
-server.listen(HEALTH_PORT, () => {
-  console.log(`Health check server is running on port ${HEALTH_PORT}`);
-});
-
+// Export the server for use elsewhere
 export { server }; 

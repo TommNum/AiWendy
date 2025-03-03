@@ -22,14 +22,16 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python
 # Set the working directory
 WORKDIR /app
 
-# Copy package files first (for better layer caching)
-COPY package*.json ./
+# Copy package files and scripts first
+COPY package.json ./
+COPY .npmrc ./
+COPY prepare-dependencies.sh ./
 
-# Generate a fresh package-lock.json with all dependencies explicitly included
-RUN rm -f package-lock.json && \
-    npm install && \
-    npm install pg @types/pg express @types/express --save && \
-    npm install
+# Make the script executable
+RUN chmod +x ./prepare-dependencies.sh
+
+# Run the dependency preparation script
+RUN ./prepare-dependencies.sh
 
 # Copy the entire source directory
 RUN mkdir -p src
@@ -46,7 +48,7 @@ RUN mkdir -p ./data ./logs
 RUN npm run build
 
 # Remove dev dependencies
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # Final runtime image
 FROM node:23.3.0-slim
@@ -69,7 +71,6 @@ RUN mkdir -p ./data ./logs
 
 # Copy built artifacts and production dependencies from the builder stage
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/data/ ./data/
@@ -80,4 +81,4 @@ COPY --from=builder /app/.env* ./
 # EXPOSE 3000
 
 # Command to start the application
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

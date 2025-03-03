@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError } from 'axios';
 import { withRetry } from '../utils/retry';
 
 /**
@@ -84,7 +84,8 @@ export class GameClient {
       const response = await this.client.post('/tasks', params);
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to set task: ${error.message}`);
+      const axiosError = error as AxiosError;
+      throw new Error(`Failed to set task: ${axiosError.message}`);
     }
   }
   
@@ -98,12 +99,13 @@ export class GameClient {
       const response = await this.client.get(`/tasks/${taskId}`);
       return response.data;
     } catch (error) {
+      const axiosError = error as AxiosError;
       // Handle specific error cases
-      if (error.response && error.response.status === 404) {
+      if (axiosError.response && axiosError.response.status === 404) {
         throw new Error('Task not found');
       }
       
-      throw new Error(`Failed to get task result: ${error.message}`);
+      throw new Error(`Failed to get task result: ${axiosError.message}`);
     }
   }
 } 
