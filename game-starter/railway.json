@@ -23,7 +23,7 @@
       },
       {
         "name": "LLM_MODEL",
-        "value": "DeepSeek-R1"
+        "value": "Llama-3.1-405B-Instruct"
       },
       {
         "name": "LLM_TEMPERATURE",

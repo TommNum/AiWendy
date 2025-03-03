@@ -17,33 +17,52 @@ if (!fs.existsSync(logsDir)) {
 const logFilePath = path.join(logsDir, 'app.log');
 
 // Initialize the database connection
-export async function initDbLogger(): Promise<void> {
-  try {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false // Needed for Railway PostgreSQL
+export async function initDbLogger(retries = 5, delay = 2000): Promise<void> {
+  let attempt = 0;
+  
+  while (attempt < retries) {
+    try {
+      console.log(`Attempting database connection (attempt ${attempt + 1}/${retries})...`);
+      
+      pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+          rejectUnauthorized: false // Needed for Railway PostgreSQL
+        }
+      });
+      
+      // Test the connection
+      await pool.query('SELECT NOW()');
+      
+      // Create logs table if it doesn't exist
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS logs (
+          id SERIAL PRIMARY KEY,
+          level VARCHAR(10) NOT NULL,
+          message TEXT NOT NULL,
+          timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+          source VARCHAR(100),
+          correlation_id VARCHAR(100),
+          additional_data JSONB
+        )
+      `);
+      
+      console.log('Database logger initialized successfully');
+      return;
+      
+    } catch (error) {
+      console.error(`Database connection attempt ${attempt + 1} failed:`, error);
+      
+      if (attempt === retries - 1) {
+        console.error('All database connection attempts failed, falling back to file logging');
+        pool = null;
+        return;
       }
-    });
-    
-    // Create logs table if it doesn't exist
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS logs (
-        id SERIAL PRIMARY KEY,
-        level VARCHAR(10) NOT NULL,
-        message TEXT NOT NULL,
-        timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
-        source VARCHAR(100),
-        correlation_id VARCHAR(100),
-        additional_data JSONB
-      )
-    `);
-    
-    console.log('Database logger initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize database logger:', error);
-    console.log('Falling back to file logging');
-    pool = null;
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, delay));
+      attempt++;
+    }
   }
 }
 

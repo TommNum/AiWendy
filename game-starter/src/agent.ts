@@ -1,6 +1,7 @@
 import { GameAgent, LLMModel } from "@virtuals-protocol/game";
 import dotenv from "dotenv";
 import path from "path";
+import { v4 as uuidv4 } from 'uuid';
 
 // Import workers and functions from their specific files
 import { agentStateWorker } from "./workers/agentStateWorker";
@@ -37,6 +38,8 @@ const wendyPlanReasoning = "Highlight charisma and innovation and always find th
 // Agent state tracking
 let isAgentInitialized = false;
 let initializationPromise: Promise<void> | null = null;
+let sessionId = uuidv4(); // Generate a unique session ID
+let initializationLock = false;
 
 // Create the agent with all necessary workers
 export const activity_agent: GameAgent = new GameAgent(process.env.API_KEY!, {
@@ -69,13 +72,15 @@ export const activity_agent: GameAgent = new GameAgent(process.env.API_KEY!, {
         return {
             plan: wendyPlan,
             plan_reasoning: wendyPlanReasoning,
-            llm_model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct" // Include model in agent state for visibility
+            llm_model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct", // Include model in agent state for visibility
+            session_id: sessionId // Include session ID in agent state
         };
     }
 });
 
 // Log the LLM model being used
 console.log(`🔄 Agent configured with LLM model: ${process.env.LLM_MODEL || LLMModel.Llama_3_1_405B_Instruct}`);
+console.log(`🔄 Agent session ID: ${sessionId}`);
 
 // Set up custom logger
 activity_agent.setLogger((agent: GameAgent, msg: string) => {
@@ -99,8 +104,19 @@ export async function initializeAgent(): Promise<void> {
         return initializationPromise;
     }
     
+    // Prevent concurrent initializations
+    if (initializationLock) {
+        console.log("🔄 Waiting for existing initialization to complete...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return initializeAgent();
+    }
+    
+    initializationLock = true;
+    
     // Start initialization and save the promise
     console.log("🔄 Starting agent initialization...");
+    console.log(`🔄 Using session ID: ${sessionId}`);
+    
     initializationPromise = activity_agent.init()
         .then(() => {
             console.log("✅ Agent initialization complete");
@@ -108,9 +124,14 @@ export async function initializeAgent(): Promise<void> {
         })
         .catch((error: Error) => {
             console.error("❌ Agent initialization failed:", error);
-            // Reset the promise so we can try again
+            // Reset state for retry
             initializationPromise = null;
+            isAgentInitialized = false;
+            sessionId = uuidv4(); // Generate new session ID
             throw error;
+        })
+        .finally(() => {
+            initializationLock = false;
         });
     
     return initializationPromise;
@@ -125,27 +146,36 @@ export function isAgentReady(): boolean {
 
 /**
  * Wait for the agent to be ready before proceeding
- * This can be used by any function that needs the agent to be initialized
  */
 export async function waitForAgentReady(timeout = 60000): Promise<void> {
-    if (isAgentInitialized) {
-        return Promise.resolve();
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeout) {
+        if (isAgentInitialized) {
+            return Promise.resolve();
+        }
+        
+        if (!initializationPromise) {
+            return initializeAgent();
+        }
+        
+        try {
+            await Promise.race([
+                initializationPromise,
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error("Initialization timeout")), 5000)
+                )
+            ]);
+            return;
+        } catch (error) {
+            console.warn("Agent initialization attempt failed, retrying...");
+            initializationPromise = null;
+            sessionId = uuidv4();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
     }
     
-    console.log("⏳ Waiting for agent to be ready...");
-    
-    // If initialization hasn't started, start it
-    if (!initializationPromise) {
-        return initializeAgent();
-    }
-    
-    // Create a timeout promise
-    const timeoutPromise = new Promise<void>((_, reject) => {
-        setTimeout(() => reject(new Error("Agent initialization timed out")), timeout);
-    });
-    
-    // Race the initialization promise against the timeout
-    return Promise.race([initializationPromise, timeoutPromise]);
+    throw new Error(`Agent failed to initialize within ${timeout}ms`);
 }
 
 // Self-executing async function to run the agent - matching the Twitter example pattern
