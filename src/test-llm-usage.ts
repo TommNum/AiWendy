@@ -20,32 +20,34 @@ async function testLLMUsage() {
   }
   
   try {
-    // Create LLM client directly
-    const llmClient = new LLMModel({
-      apiKey,
-      model: process.env.LLM_MODEL || 'DeepSeek-R1',
+    // Create a GameAgent with the appropriate model
+    const agent = new GameAgent(apiKey, {
+      name: "Test Agent",
+      goal: "Test LLM connectivity",
+      description: "A simple agent to test LLM connectivity",
+      workers: [],
+      llmModel: process.env.LLM_MODEL as LLMModel || LLMModel.DeepSeek_R1,
     });
     
-    logger.info(`Testing LLM connectivity with model: ${llmClient.model}`);
+    logger.info(`Testing LLM connectivity with model: ${agent.llmModel}`);
     
     // Send a test prompt to the LLM
     const prompt = 'Write a short poem about artificial intelligence in exactly 4 lines.';
     logger.info(`Sending test prompt to LLM: "${prompt}"`);
     
-    const response = await llmClient.complete({
-      prompt,
+    const response = await agent.generateText(prompt, {
       max_tokens: 100,
       temperature: 0.7,
     });
     
-    if (response && response.text) {
+    if (response) {
       logger.info('LLM response received successfully');
-      logger.info(`Response: ${response.text.trim()}`);
+      logger.info(`Response: ${response.trim()}`);
       
       // Get model info if available
       try {
-        const modelInfo = await llmClient.getModelInfo();
-        logger.info(`Model info: ${JSON.stringify(modelInfo)}`);
+        const modelInfo = agent.llmModel;
+        logger.info(`Model info: ${modelInfo}`);
       } catch (infoError) {
         logger.warn('Could not retrieve model info');
       }

@@ -34,18 +34,25 @@ export async function initDbLogger(retries = 5, delay = 2000): Promise<void> {
       // Test the connection
       await pool.query('SELECT NOW()');
       
-      // Create logs table if it doesn't exist
+      // Create logs table if it doesn't exist with updated schema
       await pool.query(`
-        CREATE TABLE IF NOT EXISTS logs (
+        DROP TABLE IF EXISTS logs;
+        CREATE TABLE logs (
           id SERIAL PRIMARY KEY,
           level VARCHAR(10) NOT NULL,
           message TEXT NOT NULL,
           timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
           source VARCHAR(100),
           correlation_id VARCHAR(100),
-          additional_data JSONB
+          additional_data JSONB DEFAULT '{}'::jsonb
         )
       `);
+      
+      // Initialize with a test record
+      await pool.query(
+        'INSERT INTO logs(level, message, source, additional_data) VALUES($1, $2, $3, $4)',
+        ['info', 'Database logger initialized', 'system', JSON.stringify({ timestamp: new Date() })]
+      );
       
       console.log('Database logger initialized successfully');
       return;
@@ -59,7 +66,6 @@ export async function initDbLogger(retries = 5, delay = 2000): Promise<void> {
         return;
       }
       
-      // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay));
       attempt++;
     }
@@ -108,16 +114,14 @@ async function logToDb(
   try {
     if (pool) {
       await pool.query(
-        'INSERT INTO logs(level, message, source, correlation_id, additional_data) VALUES($1, $2, $3, $4, $5)',
+        'INSERT INTO logs(level, message, source, correlation_id, additional_data) VALUES($1, $2, $3, $4, $5::jsonb)',
         [level, message, source, correlationId, JSON.stringify(additionalData)]
       );
     } else {
-      // Fallback to file logging
       fs.appendFileSync(logFilePath, logMessage + '\n');
       console.log(logMessage);
     }
   } catch (error) {
-    // If database logging fails, fall back to file
     fs.appendFileSync(logFilePath, logMessage + '\n');
     console.log(logMessage);
     console.error('Error writing to database log:', error);

@@ -68,15 +68,18 @@ export const activity_agent: GameAgent = new GameAgent(process.env.API_KEY!, {
     ],
     llmModel: process.env.LLM_MODEL ? process.env.LLM_MODEL as LLMModel : LLMModel.Llama_3_1_405B_Instruct,
     getAgentState: async () => {
-        // Return plan and reasoning as part of agent state
         return {
             plan: wendyPlan,
             plan_reasoning: wendyPlanReasoning,
-            llm_model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct", // Include model in agent state for visibility
-            session_id: sessionId // Include session ID in agent state
+            llm_model: process.env.LLM_MODEL || "Llama-3.1-405B-Instruct",
+            session_id: sessionId,
+            protocol_version: "3.0" // Add protocol version
         };
     }
 });
+
+// Set protocol version in the agent's metadata
+(activity_agent as any).protocolVersion = "3.0";
 
 // Log the LLM model being used
 console.log(`🔄 Agent configured with LLM model: ${process.env.LLM_MODEL || LLMModel.Llama_3_1_405B_Instruct}`);
@@ -91,20 +94,16 @@ activity_agent.setLogger((agent: GameAgent, msg: string) => {
 
 /**
  * Initialize the agent if not already initialized
- * Returns a promise that resolves when initialization is complete
  */
 export async function initializeAgent(): Promise<void> {
-    // If already initialized, return immediately
     if (isAgentInitialized) {
         return Promise.resolve();
     }
     
-    // If initialization is in progress, return the existing promise
     if (initializationPromise) {
         return initializationPromise;
     }
     
-    // Prevent concurrent initializations
     if (initializationLock) {
         console.log("🔄 Waiting for existing initialization to complete...");
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -112,22 +111,39 @@ export async function initializeAgent(): Promise<void> {
     }
     
     initializationLock = true;
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    // Start initialization and save the promise
-    console.log("🔄 Starting agent initialization...");
-    console.log(`🔄 Using session ID: ${sessionId}`);
-    
-    initializationPromise = activity_agent.init()
-        .then(() => {
+    const tryInitialize = async (): Promise<void> => {
+        try {
+            console.log(`🔄 Starting agent initialization (attempt ${retryCount + 1}/${maxRetries})...`);
+            console.log(`🔄 Using session ID: ${sessionId}`);
+            
+            await activity_agent.init();
             console.log("✅ Agent initialization complete");
             isAgentInitialized = true;
-        })
+            
+        } catch (error) {
+            console.error(`❌ Agent initialization failed (attempt ${retryCount + 1}):`, error);
+            
+            if (retryCount < maxRetries - 1) {
+                retryCount++;
+                sessionId = uuidv4();
+                console.log(`🔄 Retrying with new session ID: ${sessionId}`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return tryInitialize();
+            }
+            
+            throw error;
+        }
+    };
+    
+    initializationPromise = tryInitialize()
         .catch((error: Error) => {
-            console.error("❌ Agent initialization failed:", error);
-            // Reset state for retry
+            console.error("❌ All initialization attempts failed:", error);
             initializationPromise = null;
             isAgentInitialized = false;
-            sessionId = uuidv4(); // Generate new session ID
+            sessionId = uuidv4();
             throw error;
         })
         .finally(() => {
@@ -178,16 +194,8 @@ export async function waitForAgentReady(timeout = 60000): Promise<void> {
     throw new Error(`Agent failed to initialize within ${timeout}ms`);
 }
 
-// Self-executing async function to run the agent - matching the Twitter example pattern
+// Self-executing async function to run the agent
 (async () => {
-    // Initialize the agent
     await initializeAgent();
-    
-    // Run the agent with 60 seconds interval
-    // This will stop when the agent decides to wait
     await activity_agent.run(60, { verbose: true });
-    
-    // Alternative control method:
-    // For more control over the agent, you can use the step method instead
-    // await activity_agent.step();
 })();
